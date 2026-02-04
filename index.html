@@ -75,7 +75,7 @@
             <div class="flex gap-2 justify-center">
                 <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear Everything</button>
             </div>
-            <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Tap a dot to remove it. Rotation animations always orbit the origin (0,0).</p>
+            <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Drop a dot by letting go. Rotation animations always orbit the origin (0,0).</p>
         </div>
     </main>
 
@@ -135,6 +135,8 @@
         let imgPoints = [];
         let targetPoints = [];
         let reflectionLine = null;
+        let lastMousePos = { x: 0, y: 0 };
+        let isHovering = false;
         
         let currentMode = 'pre'; 
         let gridSize = 25;
@@ -153,14 +155,19 @@
             resize();
             window.addEventListener('resize', resize);
             
-            canvas.addEventListener('mousedown', handlePointerDown);
-            canvas.addEventListener('touchstart', (e) => {
+            // Interaction logic: Drop on Pointer Up
+            canvas.addEventListener('mouseup', handlePointerUp);
+            canvas.addEventListener('touchend', (e) => {
                 e.preventDefault();
-                handlePointerDown(e.touches[0]);
+                // For touch, we use the last known move position to drop
+                handlePointerUp(null); 
             }, { passive: false });
 
             canvas.addEventListener('mousemove', handlePointerMove);
+            canvas.addEventListener('mouseenter', () => isHovering = true);
+            canvas.addEventListener('mouseleave', () => isHovering = false);
             canvas.addEventListener('touchmove', (e) => {
+                isHovering = true;
                 handlePointerMove(e.touches[0]);
             });
 
@@ -225,12 +232,6 @@
                 statusMsg.textContent = `Translate: (${dx}, ${dy})`;
             } 
             else if (type === 'rotate') {
-                // Rotation Rules (Standard Cartesian):
-                // 90 CW (or 270 CCW): (x, y) -> (y, -x)
-                // 90 CCW: (x, y) -> (-y, x)
-                // 180: (x, y) -> (-x, -y)
-                // 270 CW: (x, y) -> (-y, x)
-                
                 targetPoints = prePoints.map(p => {
                     if (val === 90) return { x: p.y, y: -p.x };
                     if (val === -90) return { x: -p.y, y: p.x };
@@ -241,8 +242,6 @@
                 
                 isRotating = true;
                 rotationProgress = 0;
-                // Note: Students see "CW" as positive degree input. 
-                // In math coords (Y-up), CW rotation is a negative angle.
                 rotationTargetAngle = -(val * Math.PI / 180);
                 statusMsg.textContent = `Rotate ${val}° about origin.`;
             } 
@@ -338,13 +337,14 @@
 
         function handlePointerMove(e) {
             const pos = getMousePos(e);
+            lastMousePos = pos;
             const cart = toCartesian(pos.x, pos.y);
             valX.textContent = cart.x;
             valY.textContent = cart.y;
         }
 
-        function handlePointerDown(e) {
-            const pos = getMousePos(e);
+        function handlePointerUp(e) {
+            const pos = e ? getMousePos(e) : lastMousePos;
             const cart = toCartesian(pos.x, pos.y);
 
             if (currentMode === 'reflect-line') {
@@ -432,10 +432,14 @@
                 ctx.fillStyle = color;
                 ctx.arc(pix.x, pix.y, 4, 0, Math.PI * 2);
                 ctx.fill();
+                
+                // Labels & Coordinates above point
                 ctx.fillStyle = '#1e293b';
                 ctx.font = 'bold 10px monospace';
-                ctx.textAlign = 'left';
-                ctx.fillText(`${labelPrefix}${i+1}`, pix.x + 6, pix.y - 6);
+                ctx.textAlign = 'center';
+                ctx.fillText(`${labelPrefix}${i+1}`, pix.x, pix.y - 18);
+                ctx.font = '8px monospace';
+                ctx.fillText(`(${p.x}, ${p.y})`, pix.x, pix.y - 8);
             });
             ctx.restore();
         }
@@ -489,14 +493,9 @@
                 ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
                 prePoints.forEach(p => {
                     const radius = Math.sqrt(p.x*p.x + p.y*p.y) * gridSize;
-                    // Standard canvas angles are measured CCW from positive X.
-                    // But our Cartesian Y is flipped relative to Canvas Y.
                     const startAngle = -Math.atan2(p.y, p.x);
                     const endAngle = startAngle - currentStepAngle;
-                    
                     ctx.beginPath();
-                    // Canvas arc(x, y, radius, start, end, counterclockwise)
-                    // If target < 0 (CW), we sweep CW.
                     ctx.arc(origin.x, origin.y, radius, startAngle, endAngle, (rotationTargetAngle > 0));
                     ctx.stroke();
                 });
@@ -524,6 +523,25 @@
 
             // Student Image
             drawShape(imgPoints, '#ef4444', "P'");
+
+            // Hover Coordinates (above cursor)
+            if (isHovering && !isRotating && !isAnimatingCheck) {
+                const cart = toCartesian(lastMousePos.x, lastMousePos.y);
+                const pix = toPixels(cart.x, cart.y);
+                ctx.save();
+                ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+                ctx.font = 'bold 11px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`(${cart.x}, ${cart.y})`, lastMousePos.x, lastMousePos.y - 15);
+                
+                // Optional: helper circle for snapping
+                ctx.beginPath();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.setLineDash([2, 2]);
+                ctx.arc(pix.x, pix.y, 6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
         }
         
         window.onload = init;
