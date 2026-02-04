@@ -2,21 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Transformation Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
-            /* Prevent text selection and scrolling on the whole body */
-            user-select: none;
-            -webkit-user-select: none;
-            overflow: hidden;
-            position: fixed;
+        /* Strict lockdown of the viewport to prevent iPad "rubber-banding" or scrolling */
+        html, body {
+            margin: 0;
+            padding: 0;
             width: 100%;
             height: 100%;
+            overflow: hidden;
+            position: fixed; /* Crucial for iOS scroll locking */
+            touch-action: none; /* Disables all browser-level gestures */
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
         }
+
+        body {
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+        }
+
         .canvas-container {
             position: relative;
             width: 100%;
@@ -26,15 +35,16 @@
             border-radius: 12px;
             overflow: hidden;
             cursor: crosshair;
-            /* Explicitly disable touch gestures for the container */
             touch-action: none;
         }
+
         canvas {
             display: block;
             width: 100%;
             height: 100%;
             touch-action: none;
         }
+
         .modal {
             display: none;
             position: fixed;
@@ -42,22 +52,31 @@
             background: rgba(0,0,0,0.5);
             align-items: center;
             justify-content: center;
-            z-index: 50;
+            z-index: 100;
         }
         .modal.active { display: flex; }
         
-        /* Allow interaction for buttons and inputs specifically */
+        /* Re-enable interaction for buttons/inputs inside modals and controls */
         button, input {
             user-select: auto;
             -webkit-user-select: auto;
-            touch-action: manipulation;
+            touch-action: manipulation; /* Allows tapping but prevents zooming */
+        }
+        
+        /* Custom scroll for the controls area if it overflows on small screens */
+        .controls-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y; /* Allow scrolling only in the menu area */
+            padding-bottom: 2rem;
         }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col font-sans">
+<body class="font-sans">
 
     <!-- Header & Display -->
-    <header class="p-4 bg-white border-b border-slate-200 shadow-sm">
+    <header class="p-4 bg-white border-b border-slate-200 shadow-sm shrink-0">
         <h1 class="text-xl font-bold text-slate-800 text-center">Transformation Lab</h1>
         <div class="mt-2 flex justify-center gap-6 text-sm font-mono font-bold">
             <div class="text-blue-600">Hover: (<span id="val-x">0</span>, <span id="val-y">0</span>)</div>
@@ -66,39 +85,41 @@
     </header>
 
     <!-- Main Workspace -->
-    <main class="flex-grow p-4 flex flex-col gap-4 overflow-y-auto">
-        <div class="canvas-container shadow-inner" id="container">
+    <main class="flex-grow flex flex-col p-4 gap-4 overflow-hidden">
+        <div class="canvas-container shadow-inner shrink-0" id="container">
             <canvas id="gridCanvas"></canvas>
         </div>
 
-        <!-- Controls -->
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <!-- Mode Selector -->
-            <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
-                <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm">1. Pre-Image</button>
-                <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600">2. Image</button>
-            </div>
+        <!-- Controls Area (Only this part can scroll if screen is tiny) -->
+        <div class="controls-area">
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <!-- Mode Selector -->
+                <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
+                    <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm">1. Pre-Image</button>
+                    <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600">2. Image</button>
+                </div>
 
-            <!-- Action Buttons -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:scale-95 transition-all">Translate</button>
-                <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:scale-95 transition-all">Rotate</button>
-                <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:scale-95 transition-all">Reflect</button>
-                <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-all relative overflow-hidden">
-                    Check Work
-                </button>
-            </div>
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                    <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:scale-95 transition-all">Translate</button>
+                    <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:scale-95 transition-all">Rotate</button>
+                    <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:scale-95 transition-all">Reflect</button>
+                    <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-all relative overflow-hidden">
+                        Check Work
+                    </button>
+                </div>
 
-            <div class="flex gap-2 justify-center">
-                <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear Everything</button>
+                <div class="flex gap-2 justify-center">
+                    <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear Everything</button>
+                </div>
+                <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Tap to place a point. Rotation animations orbit the origin (0,0).</p>
             </div>
-            <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Drop a dot by letting go. Rotation animations always orbit the origin (0,0).</p>
         </div>
     </main>
 
     <!-- Modals -->
     <div id="translateModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Translate</h2>
             <div class="space-y-4">
                 <div>
@@ -116,7 +137,7 @@
     </div>
 
     <div id="rotateModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Rotate about Origin (0,0)</h2>
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button onclick="setTransformation('rotate', 90)" class="p-3 border rounded-xl hover:bg-slate-50">90° CW</button>
@@ -129,7 +150,7 @@
     </div>
 
     <div id="reflectModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Reflect</h2>
             <div class="space-y-2">
                 <button onclick="setTransformation('reflect', 'x')" class="w-full p-3 border rounded-xl hover:bg-slate-50">Across X-Axis</button>
@@ -152,7 +173,7 @@
         let imgPoints = [];
         let targetPoints = [];
         let reflectionLine = null;
-        let lastMousePos = { x: 0, y: 0 };
+        let lastTouchPos = { x: 0, y: 0 };
         let isHovering = false;
         
         let currentMode = 'pre'; 
@@ -162,8 +183,6 @@
 
         // Animation state
         let isAnimatingCheck = false;
-        
-        // Rotation Preview Animation
         let isRotating = false;
         let rotationTargetAngle = 0; 
         let rotationProgress = 0;
@@ -172,42 +191,44 @@
             resize();
             window.addEventListener('resize', resize);
             
-            // Interaction logic: Drop on Pointer Up
+            // Mouse Events
             canvas.addEventListener('mouseup', handlePointerUp);
-            canvas.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                // For touch, we use the last known move position to drop
-                handlePointerUp(null); 
-            }, { passive: false });
-
             canvas.addEventListener('mousemove', handlePointerMove);
             canvas.addEventListener('mouseenter', () => isHovering = true);
             canvas.addEventListener('mouseleave', () => isHovering = false);
             
-            // iOS fix: Passive: false allows us to call preventDefault() to stop scrolling
+            // iPad/Touch Events - Forcefully stop browser default behavior
             canvas.addEventListener('touchstart', (e) => {
-                if (e.target === canvas) e.preventDefault();
+                e.preventDefault(); // Stop scrolling/zoom
                 isHovering = true;
-                handlePointerMove(e.touches[0]);
+                const touch = e.touches[0];
+                handlePointerMove(touch);
             }, { passive: false });
 
             canvas.addEventListener('touchmove', (e) => {
-                if (e.target === canvas) e.preventDefault();
-                isHovering = true;
-                handlePointerMove(e.touches[0]);
+                e.preventDefault(); // Stop scrolling/zoom
+                const touch = e.touches[0];
+                handlePointerMove(touch);
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                // Process the tap using the last recorded position
+                handlePointerUp(null); 
+            }, { passive: false });
+
+            // Global scroll prevention
+            document.addEventListener('touchmove', (e) => {
+                // Only allow scrolling inside the controls-area, otherwise lock the screen
+                if (!e.target.closest('.controls-area')) {
+                    e.preventDefault();
+                }
             }, { passive: false });
 
             document.getElementById('mode-pre').onclick = () => switchWorkflow('pre');
             document.getElementById('mode-img').onclick = () => switchWorkflow('img');
             document.getElementById('btn-clear').onclick = clearAll;
             document.getElementById('btn-check').onclick = checkWork;
-            
-            // Prevent zooming on double tap in some iOS versions
-            document.addEventListener('touchstart', function(event) {
-                if (event.touches.length > 1) {
-                    event.preventDefault();
-                }
-            }, { passive: false });
             
             requestAnimationFrame(gameLoop);
         }
@@ -370,14 +391,14 @@
 
         function handlePointerMove(e) {
             const pos = getMousePos(e);
-            lastMousePos = pos;
+            lastTouchPos = pos;
             const cart = toCartesian(pos.x, pos.y);
             valX.textContent = cart.x;
             valY.textContent = cart.y;
         }
 
         function handlePointerUp(e) {
-            const pos = e ? getMousePos(e) : lastMousePos;
+            const pos = e ? getMousePos(e) : lastTouchPos;
             const cart = toCartesian(pos.x, pos.y);
 
             if (currentMode === 'reflect-line') {
@@ -466,7 +487,6 @@
                 ctx.arc(pix.x, pix.y, 4, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Labels & Coordinates above point
                 ctx.fillStyle = '#1e293b';
                 ctx.font = 'bold 10px monospace';
                 ctx.textAlign = 'center';
@@ -501,10 +521,8 @@
                 ctx.setLineDash([]);
             }
 
-            // Pre-Image
             drawShape(prePoints, '#3b82f6', 'P');
 
-            // Rotation Animation Preview
             if (isRotating && prePoints.length > 0) {
                 rotationProgress += 0.012; 
                 if (rotationProgress > 1) rotationProgress = 1;
@@ -520,7 +538,6 @@
                     };
                 });
                 
-                // Draw rotation paths (arcs)
                 ctx.save();
                 ctx.setLineDash([2, 4]);
                 ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
@@ -537,7 +554,6 @@
                 drawShape(rotatingPoints, '#f59e0b', "R", true, 0.5);
             }
 
-            // Check Animation Overlay
             if (isAnimatingCheck && targetPoints.length > 0) {
                 const pulse = Math.sin(Date.now() / 150) * 5;
                 drawShape(targetPoints, '#10b981', "T", true, 0.3);
@@ -554,20 +570,17 @@
                 });
             }
 
-            // Student Image
             drawShape(imgPoints, '#ef4444', "P'");
 
-            // Hover Coordinates (above cursor)
             if (isHovering && !isRotating && !isAnimatingCheck) {
-                const cart = toCartesian(lastMousePos.x, lastMousePos.y);
+                const cart = toCartesian(lastTouchPos.x, lastTouchPos.y);
                 const pix = toPixels(cart.x, cart.y);
                 ctx.save();
                 ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
                 ctx.font = 'bold 11px monospace';
                 ctx.textAlign = 'center';
-                ctx.fillText(`(${cart.x}, ${cart.y})`, lastMousePos.x, lastMousePos.y - 15);
+                ctx.fillText(`(${cart.x}, ${cart.y})`, lastTouchPos.x, lastTouchPos.y - 15);
                 
-                // Optional: helper circle for snapping
                 ctx.beginPath();
                 ctx.strokeStyle = '#3b82f6';
                 ctx.setLineDash([2, 2]);
