@@ -2,14 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Transformation Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            touch-action: none;
+        /* Strict lockdown of the viewport to prevent iPad "rubber-banding" or scrolling */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: fixed; /* Essential for iOS scroll locking */
+            touch-action: none; /* Disables browser-level gestures like pinch/zoom/scroll */
             -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
         }
+
+        body {
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+        }
+
         .canvas-container {
             position: relative;
             width: 100%;
@@ -19,12 +35,16 @@
             border-radius: 12px;
             overflow: hidden;
             cursor: crosshair;
+            touch-action: none;
         }
+
         canvas {
             display: block;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
+
         .modal {
             display: none;
             position: fixed;
@@ -32,56 +52,74 @@
             background: rgba(0,0,0,0.5);
             align-items: center;
             justify-content: center;
-            z-index: 50;
+            z-index: 100;
         }
         .modal.active { display: flex; }
+        
+        /* Re-enable interaction for buttons/inputs */
+        button, input {
+            user-select: auto;
+            -webkit-user-select: auto;
+            touch-action: manipulation; 
+        }
+        
+        /* Custom scroll for the controls area if it overflows on small screens */
+        .controls-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y; 
+            padding-bottom: 2rem;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col font-sans">
+<body class="font-sans">
 
     <!-- Header & Display -->
-    <header class="p-4 bg-white border-b border-slate-200 shadow-sm">
+    <header class="p-4 bg-white border-b border-slate-200 shadow-sm shrink-0">
         <h1 class="text-xl font-bold text-slate-800 text-center">Transformation Lab</h1>
         <div class="mt-2 flex justify-center gap-6 text-sm font-mono font-bold">
-            <div class="text-blue-600">Hover: (<span id="val-x">0</span>, <span id="val-y">0</span>)</div>
+            <div class="text-blue-600">Current: (<span id="val-x">0</span>, <span id="val-y">0</span>)</div>
             <div id="status-msg" class="text-slate-500 italic text-center max-w-xs">Place points for your Pre-Image.</div>
         </div>
     </header>
 
     <!-- Main Workspace -->
-    <main class="flex-grow p-4 flex flex-col gap-4 overflow-y-auto">
-        <div class="canvas-container shadow-inner" id="container">
+    <main class="flex-grow flex flex-col p-4 gap-4 overflow-hidden">
+        <div class="canvas-container shadow-inner shrink-0" id="container">
             <canvas id="gridCanvas"></canvas>
         </div>
 
-        <!-- Controls -->
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <!-- Mode Selector -->
-            <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
-                <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm">1. Pre-Image</button>
-                <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600">2. Image</button>
-            </div>
+        <!-- Controls Area -->
+        <div class="controls-area">
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <!-- Mode Selector -->
+                <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
+                    <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm">1. Pre-Image</button>
+                    <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600">2. Image</button>
+                </div>
 
-            <!-- Action Buttons -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:scale-95 transition-all">Translate</button>
-                <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:scale-95 transition-all">Rotate</button>
-                <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:scale-95 transition-all">Reflect</button>
-                <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-all relative overflow-hidden">
-                    Check Work
-                </button>
-            </div>
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                    <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:scale-95 transition-all">Translate</button>
+                    <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:scale-95 transition-all">Rotate</button>
+                    <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:scale-95 transition-all">Reflect</button>
+                    <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-all relative overflow-hidden">
+                        Check Work
+                    </button>
+                </div>
 
-            <div class="flex gap-2 justify-center">
-                <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear Everything</button>
+                <div class="flex gap-2 justify-center">
+                    <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear Everything</button>
+                </div>
+                <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Tap once to add/remove points. Coordinates appear above each vertex.</p>
             </div>
-            <p class="text-center text-[10px] text-slate-400 mt-3">Tip: Tap a dot to remove it. Rotation animations always orbit the origin (0,0).</p>
         </div>
     </main>
 
     <!-- Modals -->
-    <div id="translateModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
+    <div id="translateModal" class="modal p-4" onclick="closeModal()">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Translate</h2>
             <div class="space-y-4">
                 <div>
@@ -98,9 +136,9 @@
         </div>
     </div>
 
-    <div id="rotateModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
-            <h2 class="text-xl font-bold mb-4">Rotate about Origin (0,0)</h2>
+    <div id="rotateModal" class="modal p-4" onclick="closeModal()">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
+            <h2 class="text-xl font-bold mb-4">Rotate about (0,0)</h2>
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button onclick="setTransformation('rotate', 90)" class="p-3 border rounded-xl hover:bg-slate-50">90° CW</button>
                 <button onclick="setTransformation('rotate', -90)" class="p-3 border rounded-xl hover:bg-slate-50">90° CCW</button>
@@ -111,8 +149,8 @@
         </div>
     </div>
 
-    <div id="reflectModal" class="modal p-4">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm">
+    <div id="reflectModal" class="modal p-4" onclick="closeModal()">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Reflect</h2>
             <div class="space-y-2">
                 <button onclick="setTransformation('reflect', 'x')" class="w-full p-3 border rounded-xl hover:bg-slate-50">Across X-Axis</button>
@@ -135,6 +173,8 @@
         let imgPoints = [];
         let targetPoints = [];
         let reflectionLine = null;
+        let lastPointerPos = { x: 0, y: 0 };
+        let isHovering = false;
         
         let currentMode = 'pre'; 
         let gridSize = 25;
@@ -143,8 +183,6 @@
 
         // Animation state
         let isAnimatingCheck = false;
-        
-        // Rotation Preview Animation
         let isRotating = false;
         let rotationTargetAngle = 0; 
         let rotationProgress = 0;
@@ -153,16 +191,37 @@
             resize();
             window.addEventListener('resize', resize);
             
-            canvas.addEventListener('mousedown', handlePointerDown);
+            // Mouse Events
+            canvas.addEventListener('mouseup', handlePointerUp);
+            canvas.addEventListener('mousemove', (e) => {
+                isHovering = true;
+                handlePointerMove(e);
+            });
+            canvas.addEventListener('mouseleave', () => isHovering = false);
+            
+            // Touch Events (iPad Lockdown)
             canvas.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                handlePointerDown(e.touches[0]);
+                e.preventDefault(); 
+                isHovering = true;
+                handlePointerMove(e.touches[0]);
             }, { passive: false });
 
-            canvas.addEventListener('mousemove', handlePointerMove);
             canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault(); 
                 handlePointerMove(e.touches[0]);
-            });
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handlePointerUp(null); 
+            }, { passive: false });
+
+            // Universal Scroll Prevention except in specific area
+            document.addEventListener('touchmove', (e) => {
+                if (!e.target.closest('.controls-area')) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
 
             document.getElementById('mode-pre').onclick = () => switchWorkflow('pre');
             document.getElementById('mode-img').onclick = () => switchWorkflow('img');
@@ -225,12 +284,6 @@
                 statusMsg.textContent = `Translate: (${dx}, ${dy})`;
             } 
             else if (type === 'rotate') {
-                // Rotation Rules (Standard Cartesian):
-                // 90 CW (or 270 CCW): (x, y) -> (y, -x)
-                // 90 CCW: (x, y) -> (-y, x)
-                // 180: (x, y) -> (-x, -y)
-                // 270 CW: (x, y) -> (-y, x)
-                
                 targetPoints = prePoints.map(p => {
                     if (val === 90) return { x: p.y, y: -p.x };
                     if (val === -90) return { x: -p.y, y: p.x };
@@ -238,11 +291,8 @@
                     if (val === 270) return { x: -p.y, y: p.x };
                     return p;
                 });
-                
                 isRotating = true;
                 rotationProgress = 0;
-                // Note: Students see "CW" as positive degree input. 
-                // In math coords (Y-up), CW rotation is a negative angle.
                 rotationTargetAngle = -(val * Math.PI / 180);
                 statusMsg.textContent = `Rotate ${val}° about origin.`;
             } 
@@ -286,21 +336,17 @@
                 alert("Choose a transformation first!");
                 return;
             }
-            
             isAnimatingCheck = true;
-
             if (imgPoints.length !== targetPoints.length) {
                 statusMsg.innerHTML = `<span class='text-amber-600 font-bold'>Point mismatch. Need ${targetPoints.length} points.</span>`;
                 return;
             }
-
             let correctCount = 0;
             const threshold = 0.25; 
             targetPoints.forEach(tp => {
                 const found = imgPoints.some(ip => Math.abs(ip.x - tp.x) < threshold && Math.abs(ip.y - tp.y) < threshold);
                 if (found) correctCount++;
             });
-
             if (correctCount === targetPoints.length) {
                 statusMsg.innerHTML = "<span class='text-emerald-600 font-bold'>Excellent! Correct!</span>";
             } else {
@@ -338,13 +384,14 @@
 
         function handlePointerMove(e) {
             const pos = getMousePos(e);
+            lastPointerPos = pos;
             const cart = toCartesian(pos.x, pos.y);
             valX.textContent = cart.x;
             valY.textContent = cart.y;
         }
 
-        function handlePointerDown(e) {
-            const pos = getMousePos(e);
+        function handlePointerUp(e) {
+            const pos = e ? getMousePos(e) : lastPointerPos;
             const cart = toCartesian(pos.x, pos.y);
 
             if (currentMode === 'reflect-line') {
@@ -355,12 +402,8 @@
             else {
                 let list = currentMode === 'pre' ? prePoints : imgPoints;
                 const existingIndex = list.findIndex(p => Math.abs(p.x - cart.x) < 0.2 && Math.abs(p.y - cart.y) < 0.2);
-                
-                if (existingIndex !== -1) {
-                    list.splice(existingIndex, 1);
-                } else {
-                    list.push(cart);
-                }
+                if (existingIndex !== -1) list.splice(existingIndex, 1);
+                else list.push(cart);
                 isAnimatingCheck = false;
                 isRotating = false;
             }
@@ -368,6 +411,7 @@
 
         function drawGrid() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Minor gridlines (0.5 units)
             ctx.beginPath();
             ctx.strokeStyle = '#f1f5f9';
             ctx.lineWidth = 0.5;
@@ -379,6 +423,7 @@
             }
             ctx.stroke();
 
+            // Major gridlines (1 unit)
             ctx.beginPath();
             ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
@@ -390,6 +435,7 @@
             }
             ctx.stroke();
 
+            // Axes
             ctx.beginPath();
             ctx.strokeStyle = '#475569';
             ctx.lineWidth = 2;
@@ -397,6 +443,7 @@
             ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, canvas.height);
             ctx.stroke();
 
+            // Axis labels
             ctx.fillStyle = '#94a3b8';
             ctx.font = '9px sans-serif';
             ctx.textAlign = 'center';
@@ -428,14 +475,23 @@
 
             list.forEach((p, i) => {
                 const pix = toPixels(p.x, p.y);
+                // Draw point
                 ctx.beginPath();
                 ctx.fillStyle = color;
                 ctx.arc(pix.x, pix.y, 4, 0, Math.PI * 2);
                 ctx.fill();
+                
+                // Draw Label and Coordinates
                 ctx.fillStyle = '#1e293b';
+                ctx.textAlign = 'center';
+                
+                // Vertex Name (e.g., P1, P'1)
                 ctx.font = 'bold 10px monospace';
-                ctx.textAlign = 'left';
-                ctx.fillText(`${labelPrefix}${i+1}`, pix.x + 6, pix.y - 6);
+                ctx.fillText(`${labelPrefix}${i+1}`, pix.x, pix.y - 18);
+                
+                // Cartesian Coordinates (e.g., (2, -3))
+                ctx.font = '8px monospace';
+                ctx.fillText(`(${p.x}, ${p.y})`, pix.x, pix.y - 8);
             });
             ctx.restore();
         }
@@ -464,52 +520,35 @@
                 ctx.setLineDash([]);
             }
 
-            // Pre-Image
             drawShape(prePoints, '#3b82f6', 'P');
 
-            // Rotation Animation Preview
             if (isRotating && prePoints.length > 0) {
                 rotationProgress += 0.012; 
                 if (rotationProgress > 1) rotationProgress = 1;
-                
                 const currentStepAngle = rotationTargetAngle * rotationProgress;
-                
                 const rotatingPoints = prePoints.map(p => {
                     const cos = Math.cos(currentStepAngle);
                     const sin = Math.sin(currentStepAngle);
-                    return {
-                        x: p.x * cos - p.y * sin,
-                        y: p.x * sin + p.y * cos
-                    };
+                    return { x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos };
                 });
-                
-                // Draw rotation paths (arcs)
                 ctx.save();
                 ctx.setLineDash([2, 4]);
                 ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
                 prePoints.forEach(p => {
                     const radius = Math.sqrt(p.x*p.x + p.y*p.y) * gridSize;
-                    // Standard canvas angles are measured CCW from positive X.
-                    // But our Cartesian Y is flipped relative to Canvas Y.
                     const startAngle = -Math.atan2(p.y, p.x);
                     const endAngle = startAngle - currentStepAngle;
-                    
                     ctx.beginPath();
-                    // Canvas arc(x, y, radius, start, end, counterclockwise)
-                    // If target < 0 (CW), we sweep CW.
                     ctx.arc(origin.x, origin.y, radius, startAngle, endAngle, (rotationTargetAngle > 0));
                     ctx.stroke();
                 });
                 ctx.restore();
-
                 drawShape(rotatingPoints, '#f59e0b', "R", true, 0.5);
             }
 
-            // Check Animation Overlay
             if (isAnimatingCheck && targetPoints.length > 0) {
                 const pulse = Math.sin(Date.now() / 150) * 5;
                 drawShape(targetPoints, '#10b981', "T", true, 0.3);
-
                 targetPoints.forEach((tp, i) => {
                     const pix = toPixels(tp.x, tp.y);
                     const threshold = 0.25;
@@ -522,8 +561,23 @@
                 });
             }
 
-            // Student Image
             drawShape(imgPoints, '#ef4444', "P'");
+
+            if (isHovering && !isRotating && !isAnimatingCheck) {
+                const cart = toCartesian(lastPointerPos.x, lastPointerPos.y);
+                const pix = toPixels(cart.x, cart.y);
+                ctx.save();
+                ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+                ctx.font = 'bold 11px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`(${cart.x}, ${cart.y})`, lastPointerPos.x, lastPointerPos.y - 15);
+                ctx.beginPath();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.setLineDash([2, 2]);
+                ctx.arc(pix.x, pix.y, 6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
         }
         
         window.onload = init;
