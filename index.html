@@ -9,6 +9,13 @@
         body {
             touch-action: none;
             -webkit-tap-highlight-color: transparent;
+            /* Prevent text selection and scrolling on the whole body */
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
         }
         .canvas-container {
             position: relative;
@@ -19,11 +26,14 @@
             border-radius: 12px;
             overflow: hidden;
             cursor: crosshair;
+            /* Explicitly disable touch gestures for the container */
+            touch-action: none;
         }
         canvas {
             display: block;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
         .modal {
             display: none;
@@ -35,6 +45,13 @@
             z-index: 50;
         }
         .modal.active { display: flex; }
+        
+        /* Allow interaction for buttons and inputs specifically */
+        button, input {
+            user-select: auto;
+            -webkit-user-select: auto;
+            touch-action: manipulation;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col font-sans">
@@ -166,15 +183,31 @@
             canvas.addEventListener('mousemove', handlePointerMove);
             canvas.addEventListener('mouseenter', () => isHovering = true);
             canvas.addEventListener('mouseleave', () => isHovering = false);
-            canvas.addEventListener('touchmove', (e) => {
+            
+            // iOS fix: Passive: false allows us to call preventDefault() to stop scrolling
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.target === canvas) e.preventDefault();
                 isHovering = true;
                 handlePointerMove(e.touches[0]);
-            });
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.target === canvas) e.preventDefault();
+                isHovering = true;
+                handlePointerMove(e.touches[0]);
+            }, { passive: false });
 
             document.getElementById('mode-pre').onclick = () => switchWorkflow('pre');
             document.getElementById('mode-img').onclick = () => switchWorkflow('img');
             document.getElementById('btn-clear').onclick = clearAll;
             document.getElementById('btn-check').onclick = checkWork;
+            
+            // Prevent zooming on double tap in some iOS versions
+            document.addEventListener('touchstart', function(event) {
+                if (event.touches.length > 1) {
+                    event.preventDefault();
+                }
+            }, { passive: false });
             
             requestAnimationFrame(gameLoop);
         }
