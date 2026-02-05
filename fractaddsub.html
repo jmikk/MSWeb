@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraction Master Practice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #f0f4f8;
+        }
+
+        .fraction-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+        }
+
+        .fraction-line {
+            width: 100%;
+            height: 3px;
+            background-color: #1e293b;
+            margin: 4px 0;
+            border-radius: 2px;
+        }
+
+        .answer-input {
+            width: 85px;
+            height: 60px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            border: 3px solid #cbd5e1;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .answer-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        .correct {
+            border-color: #10b981 !important;
+            background-color: #ecfdf5 !important;
+        }
+
+        .incorrect {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+        }
+
+        /* Animation for feedback */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-bounce-short {
+            animation: bounce 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-2xl w-full bg-white rounded-3xl shadow-2xl p-8 md:p-12">
+        <!-- Header & Score -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800">Fraction Master</h1>
+                <p class="text-slate-500 font-medium">Practice Addition & Subtraction</p>
+            </div>
+            <div class="bg-blue-100 text-blue-700 px-6 py-2 rounded-2xl font-bold text-xl">
+                Score: <span id="score">0</span>
+            </div>
+        </div>
+
+        <!-- Problem Display -->
+        <div class="flex flex-wrap items-center justify-center gap-4 md:gap-8 mb-12 py-8 bg-slate-50 rounded-2xl">
+            <!-- First Fraction -->
+            <div class="fraction-container">
+                <div id="num1" class="text-4xl font-bold text-slate-800">3</div>
+                <div class="fraction-line"></div>
+                <div id="den1" class="text-4xl font-bold text-slate-800">4</div>
+            </div>
+
+            <!-- Operator -->
+            <div id="operator" class="text-4xl font-black text-blue-600">+</div>
+
+            <!-- Second Fraction -->
+            <div class="fraction-container">
+                <div id="num2" class="text-4xl font-bold text-slate-800">1</div>
+                <div class="fraction-line"></div>
+                <div id="den2" class="text-4xl font-bold text-slate-800">5</div>
+            </div>
+
+            <!-- Equals Sign -->
+            <div class="text-4xl font-black text-slate-400">=</div>
+
+            <!-- Answer Area -->
+            <div class="fraction-container">
+                <input type="number" id="ans-num" class="answer-input" placeholder="?" autocomplete="off">
+                <div class="fraction-line"></div>
+                <input type="number" id="ans-den" class="answer-input" placeholder="?" autocomplete="off">
+            </div>
+        </div>
+
+        <!-- Message/Feedback -->
+        <div id="feedback" class="text-center h-8 mb-8 font-bold text-lg transition-all"></div>
+
+        <!-- Controls -->
+        <div class="flex flex-col sm:flex-row gap-4">
+            <button onclick="checkAnswer()" id="check-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 text-xl">
+                Check Answer
+            </button>
+            <button onclick="newProblem()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-4 rounded-2xl transition-transform active:scale-95 text-xl">
+                Next Problem
+            </button>
+        </div>
+
+        <!-- Help Section -->
+        <div class="mt-10 p-6 bg-amber-50 rounded-xl border border-amber-100">
+            <h3 class="text-amber-800 font-bold mb-2 flex items-center gap-2">
+                💡 Tip
+            </h3>
+            <p class="text-amber-700 text-sm leading-relaxed">
+                To add or subtract fractions, find a common denominator by multiplying the denominators together ($b \times d$). Then, cross-multiply for the numerators: $(a \times d) \pm (b \times c)$.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let state = {
+            num1: 0,
+            den1: 0,
+            num2: 0,
+            den2: 0,
+            op: '+',
+            score: 0,
+            answered: false
+        };
+
+        const elements = {
+            num1: document.getElementById('num1'),
+            den1: document.getElementById('den1'),
+            num2: document.getElementById('num2'),
+            den2: document.getElementById('den2'),
+            op: document.getElementById('operator'),
+            ansNum: document.getElementById('ans-num'),
+            ansDen: document.getElementById('ans-den'),
+            feedback: document.getElementById('feedback'),
+            score: document.getElementById('score'),
+            checkBtn: document.getElementById('check-btn')
+        };
+
+        function getRandom(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function newProblem() {
+            state.answered = false;
+            state.op = Math.random() > 0.5 ? '+' : '-';
+            
+            // Allow double digit denominators (up to 20)
+            state.num1 = getRandom(1, 12);
+            state.den1 = getRandom(2, 20);
+            state.num2 = getRandom(1, 12);
+            state.den2 = getRandom(2, 20);
+
+            // Ensure subtraction results in a positive number for beginners
+            if (state.op === '-') {
+                if ((state.num1 / state.den1) < (state.num2 / state.den2)) {
+                    [state.num1, state.num2] = [state.num2, state.num1];
+                    [state.den1, state.den2] = [state.den2, state.den1];
+                }
+            }
+
+            // Update UI
+            elements.num1.textContent = state.num1;
+            elements.den1.textContent = state.den1;
+            elements.num2.textContent = state.num2;
+            elements.den2.textContent = state.den2;
+            elements.op.textContent = state.op;
+
+            // Reset inputs
+            elements.ansNum.value = '';
+            elements.ansDen.value = '';
+            elements.ansNum.classList.remove('correct', 'incorrect');
+            elements.ansDen.classList.remove('correct', 'incorrect');
+            elements.feedback.textContent = '';
+            elements.checkBtn.disabled = false;
+            elements.ansNum.focus();
+        }
+
+        function checkAnswer() {
+            if (state.answered) return;
+
+            const uNum = parseInt(elements.ansNum.value);
+            const uDen = parseInt(elements.ansDen.value);
+
+            if (isNaN(uNum) || isNaN(uDen)) {
+                showFeedback("Please enter both numbers!", "text-amber-600");
+                return;
+            }
+
+            if (uDen === 0) {
+                showFeedback("Denominator cannot be zero!", "text-red-600");
+                return;
+            }
+
+            let targetNum;
+            const targetDen = state.den1 * state.den2;
+
+            if (state.op === '+') {
+                targetNum = (state.num1 * state.den2) + (state.num2 * state.den1);
+            } else {
+                targetNum = (state.num1 * state.den2) - (state.num2 * state.den1);
+            }
+
+            const isCorrect = (uNum * targetDen === targetNum * uDen);
+
+            if (isCorrect) {
+                state.score++;
+                state.answered = true;
+                elements.score.textContent = state.score;
+                elements.ansNum.classList.add('correct');
+                elements.ansDen.classList.add('correct');
+                showFeedback("Fantastic! That is correct. 🎉", "text-emerald-600");
+                elements.checkBtn.disabled = true;
+                
+                document.querySelector('.max-w-2xl').classList.add('animate-bounce-short');
+                setTimeout(() => {
+                    document.querySelector('.max-w-2xl').classList.remove('animate-bounce-short');
+                }, 500);
+            } else {
+                elements.ansNum.classList.add('incorrect');
+                elements.ansDen.classList.add('incorrect');
+                showFeedback("Not quite right. Check your math and try again!", "text-red-600");
+                
+                setTimeout(() => {
+                    elements.ansNum.classList.remove('incorrect');
+                    elements.ansDen.classList.remove('incorrect');
+                }, 1500);
+            }
+        }
+
+        function showFeedback(text, colorClass) {
+            elements.feedback.textContent = text;
+            elements.feedback.className = `text-center h-8 mb-8 font-bold text-lg transition-all ${colorClass}`;
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (state.answered) {
+                    newProblem();
+                } else {
+                    checkAnswer();
+                }
+            }
+        });
+
+        window.onload = newProblem;
+    </script>
+</body>
+</html>
