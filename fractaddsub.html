@@ -6,7 +6,7 @@
     <title>Fraction Master Practice</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
         
         body {
             font-family: 'Outfit', sans-serif;
@@ -23,9 +23,9 @@
 
         .fraction-line {
             width: 100%;
-            height: 3px;
-            background-color: #1e293b;
-            margin: 4px 0;
+            height: 4px; 
+            background-color: #0f172a; 
+            margin: 6px 0;
             border-radius: 2px;
         }
 
@@ -34,7 +34,8 @@
             height: 60px;
             text-align: center;
             font-size: 1.5rem;
-            font-weight: 800;
+            font-weight: 900; 
+            color: #0f172a;
             border: 3px solid #cbd5e1;
             border-radius: 12px;
             transition: all 0.2s;
@@ -42,7 +43,7 @@
 
         .answer-input:focus {
             outline: none;
-            border-color: #3b82f6;
+            border-color: #2563eb;
             background-color: #eff6ff;
         }
 
@@ -84,29 +85,35 @@
         <div class="flex flex-wrap items-center justify-center gap-4 md:gap-8 mb-12 py-8 bg-slate-50 rounded-2xl">
             <!-- First Fraction -->
             <div class="fraction-container">
-                <div id="num1" class="text-4xl font-bold text-slate-800">3</div>
+                <div id="num1" class="text-5xl font-black text-slate-900">3</div>
                 <div class="fraction-line"></div>
-                <div id="den1" class="text-4xl font-bold text-slate-800">4</div>
+                <div id="den1" class="text-5xl font-black text-slate-900">4</div>
             </div>
 
             <!-- Operator -->
-            <div id="operator" class="text-4xl font-black text-blue-600">+</div>
+            <div id="operator" class="text-5xl font-black text-blue-600 pb-2">+</div>
 
             <!-- Second Fraction -->
             <div class="fraction-container">
-                <div id="num2" class="text-4xl font-bold text-slate-800">1</div>
+                <div id="num2" class="text-5xl font-black text-slate-900">1</div>
                 <div class="fraction-line"></div>
-                <div id="den2" class="text-4xl font-bold text-slate-800">5</div>
+                <div id="den2" class="text-5xl font-black text-slate-900">5</div>
             </div>
 
             <!-- Equals Sign -->
-            <div class="text-4xl font-black text-slate-400">=</div>
+            <div class="text-5xl font-black text-slate-400 pb-2">=</div>
 
-            <!-- Answer Area -->
-            <div class="fraction-container">
-                <input type="number" id="ans-num" class="answer-input" placeholder="?" autocomplete="off">
-                <div class="fraction-line"></div>
-                <input type="number" id="ans-den" class="answer-input" placeholder="?" autocomplete="off">
+            <!-- Answer Area (Modified for Mixed Numbers) -->
+            <div class="flex items-center gap-3">
+                <!-- Whole Number Input -->
+                <input type="number" id="ans-whole" class="answer-input" placeholder="?" autocomplete="off">
+                
+                <!-- Fraction Part -->
+                <div class="fraction-container">
+                    <input type="number" id="ans-num" class="answer-input" placeholder="?" autocomplete="off">
+                    <div class="fraction-line"></div>
+                    <input type="number" id="ans-den" class="answer-input" placeholder="?" autocomplete="off">
+                </div>
             </div>
         </div>
 
@@ -129,7 +136,7 @@
                 💡 Tip
             </h3>
             <p class="text-amber-700 text-sm leading-relaxed">
-                To add or subtract fractions, find a common denominator by multiplying the denominators together ($b \times d$). Then, cross-multiply for the numerators: $(a \times d) \pm (b \times c)$.
+                You can answer with improper fractions (like $\frac{5}{4}$) OR mixed numbers (like $1 \frac{1}{4}$). To convert, multiply the whole number by the denominator and add the numerator!
             </p>
         </div>
     </div>
@@ -151,6 +158,7 @@
             num2: document.getElementById('num2'),
             den2: document.getElementById('den2'),
             op: document.getElementById('operator'),
+            ansWhole: document.getElementById('ans-whole'), // New element
             ansNum: document.getElementById('ans-num'),
             ansDen: document.getElementById('ans-den'),
             feedback: document.getElementById('feedback'),
@@ -172,7 +180,7 @@
             state.num2 = getRandom(1, 12);
             state.den2 = getRandom(2, 20);
 
-            // Ensure subtraction results in a positive number for beginners
+            // Ensure subtraction results in a positive number
             if (state.op === '-') {
                 if ((state.num1 / state.den1) < (state.num2 / state.den2)) {
                     [state.num1, state.num2] = [state.num2, state.num1];
@@ -188,31 +196,51 @@
             elements.op.textContent = state.op;
 
             // Reset inputs
+            elements.ansWhole.value = ''; // Reset whole number
             elements.ansNum.value = '';
             elements.ansDen.value = '';
+            
+            elements.ansWhole.classList.remove('correct', 'incorrect');
             elements.ansNum.classList.remove('correct', 'incorrect');
             elements.ansDen.classList.remove('correct', 'incorrect');
+            
             elements.feedback.textContent = '';
             elements.checkBtn.disabled = false;
-            elements.ansNum.focus();
+            // Focus on whole number input first now that it exists
+            elements.ansWhole.focus();
         }
 
         function checkAnswer() {
             if (state.answered) return;
 
-            const uNum = parseInt(elements.ansNum.value);
-            const uDen = parseInt(elements.ansDen.value);
+            // Get values strings to check for emptiness
+            const valWhole = elements.ansWhole.value.trim();
+            const valNum = elements.ansNum.value.trim();
+            const valDen = elements.ansDen.value.trim();
 
-            if (isNaN(uNum) || isNaN(uDen)) {
-                showFeedback("Please enter both numbers!", "text-amber-600");
-                return;
+            // Treat empty inputs as 0 for numerator/whole, and 1 for denominator (to prevent divide by zero issues in logic)
+            // But strict check: if numerator provided, denominator is needed.
+            
+            if (valWhole === '' && valNum === '' && valDen === '') {
+                 showFeedback("Please enter an answer!", "text-amber-600");
+                 return;
             }
 
-            if (uDen === 0) {
-                showFeedback("Denominator cannot be zero!", "text-red-600");
+            if (valNum !== '' && valDen === '') {
+                showFeedback("Please enter a denominator!", "text-amber-600");
                 return;
             }
+            
+            if (valDen !== '' && parseInt(valDen) === 0) {
+                 showFeedback("Denominator cannot be zero!", "text-red-600");
+                 return;
+            }
 
+            const uWhole = valWhole === '' ? 0 : parseInt(valWhole);
+            const uNum = valNum === '' ? 0 : parseInt(valNum);
+            const uDen = valDen === '' ? 1 : parseInt(valDen);
+
+            // Calculate Target Value
             let targetNum;
             const targetDen = state.den1 * state.den2;
 
@@ -222,14 +250,25 @@
                 targetNum = (state.num1 * state.den2) - (state.num2 * state.den1);
             }
 
-            const isCorrect = (uNum * targetDen === targetNum * uDen);
+            // Calculate User Value (convert mixed to improper for comparison)
+            // User value = Whole + (Num / Den) => ((Whole * Den) + Num) / Den
+            const userImproperNum = (uWhole * uDen) + uNum;
+            const userImproperDen = uDen;
+
+            // Check Equality: userImproperNum / userImproperDen === targetNum / targetDen
+            // Cross Multiply: userImproperNum * targetDen === targetNum * userImproperDen
+            const isCorrect = (userImproperNum * targetDen === targetNum * userImproperDen);
 
             if (isCorrect) {
                 state.score++;
                 state.answered = true;
                 elements.score.textContent = state.score;
-                elements.ansNum.classList.add('correct');
-                elements.ansDen.classList.add('correct');
+                
+                // Highlight inputs used
+                if(valWhole !== '') elements.ansWhole.classList.add('correct');
+                if(valNum !== '') elements.ansNum.classList.add('correct');
+                if(valDen !== '') elements.ansDen.classList.add('correct');
+                
                 showFeedback("Fantastic! That is correct. 🎉", "text-emerald-600");
                 elements.checkBtn.disabled = true;
                 
@@ -238,11 +277,14 @@
                     document.querySelector('.max-w-2xl').classList.remove('animate-bounce-short');
                 }, 500);
             } else {
-                elements.ansNum.classList.add('incorrect');
-                elements.ansDen.classList.add('incorrect');
+                if(valWhole !== '') elements.ansWhole.classList.add('incorrect');
+                if(valNum !== '') elements.ansNum.classList.add('incorrect');
+                if(valDen !== '') elements.ansDen.classList.add('incorrect');
+                
                 showFeedback("Not quite right. Check your math and try again!", "text-red-600");
                 
                 setTimeout(() => {
+                    elements.ansWhole.classList.remove('incorrect');
                     elements.ansNum.classList.remove('incorrect');
                     elements.ansDen.classList.remove('incorrect');
                 }, 1500);
