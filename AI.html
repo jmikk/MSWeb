@@ -86,9 +86,14 @@
                 </div>
             </div>
 
-            <button onclick="resetAI()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95">
-                Restart Training
-            </button>
+            <div class="flex flex-col gap-3">
+                <button onclick="softReset()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95">
+                    Keep Training (Refine Memory)
+                </button>
+                <button onclick="fullReset()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-all active:scale-95">
+                    Delete Memory & Start Over
+                </button>
+            </div>
         </div>
     </div>
 
@@ -164,7 +169,7 @@
                     <div class="flex flex-col items-center">
                         <div id="game-grid"></div>
                         <div class="mt-4 flex gap-2">
-                            <button onclick="resetAI()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-md font-bold text-xs transition-colors">Reset Everything</button>
+                            <button onclick="fullReset()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-md font-bold text-xs transition-colors">Reset Everything</button>
                         </div>
                     </div>
                 </div>
@@ -229,9 +234,7 @@
                         
                         // Arrow logic:
                         if (lastMove) {
-                            // Map direction to rotation degrees (assuming Arrow Up is base)
                             const rotMap = { 'up': 0, 'right': 90, 'down': 180, 'left': -90 };
-                            // Insert SVG arrow
                             agent.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="width:60%; height:60%; transform: rotate(${rotMap[lastMove]}deg)">
                                 <line x1="12" y1="19" x2="12" y2="5"></line>
                                 <polyline points="5 12 12 5 19 12"></polyline>
@@ -263,8 +266,6 @@
             setTimeout(() => mainContainer.classList.remove(flashClass), 500);
 
             if (points < 0) {
-                // When penalized, we backtrack
-                // We keep the arrow pointing to where we TRIED to go to show the error
                 agentPos = { ...prevPos };
                 createGrid();
                 await new Promise(r => setTimeout(r, 400));
@@ -280,7 +281,6 @@
                 { n: "left", x: -1, y: 0 }, { n: "right", x: 1, y: 0 }
             ];
 
-            // Filter for moves that stay within the grid
             const validDirs = dirs.filter(d => {
                 const newX = agentPos.x + d.x;
                 const newY = agentPos.y + d.y;
@@ -288,15 +288,24 @@
             });
             
             let chosen;
+            const state = qTable[`${agentPos.x},${agentPos.y}`];
+
             if (isTesting) {
-                // Testing: Pick best known direction from valid options
-                const state = qTable[`${agentPos.x},${agentPos.y}`];
                 const sorted = validDirs.sort((a,b) => state[b.n] - state[a.n]);
-                // Very slight randomness for exploration if values are tied
                 chosen = Math.random() > 0.05 ? sorted[0] : validDirs[Math.floor(Math.random()*validDirs.length)];
             } else {
-                // Training: Pick any valid random direction
-                chosen = validDirs[Math.floor(Math.random() * validDirs.length)];
+                // Training: Mix of exploration (random) and exploitation (using what it learned)
+                // Find the best move based on current knowledge
+                const bestMove = validDirs.reduce((a, b) => (state[a.n] > state[b.n] ? a : b));
+                const bestScore = state[bestMove.n];
+
+                // If we have a good path (score > 0), take it 50% of the time
+                // This makes it look "smarter" as it learns, but still explores
+                if (bestScore > 0 && Math.random() > 0.5) {
+                    chosen = bestMove;
+                } else {
+                    chosen = validDirs[Math.floor(Math.random() * validDirs.length)];
+                }
             }
 
             lastMove = chosen.n;
@@ -332,7 +341,7 @@
                 if (agentPos.x === goalPos.x && agentPos.y === goalPos.y) break;
                 if (stepCount > 50) {
                     alert("The AI got lost! Try training it more consistently.");
-                    resetAI();
+                    softReset();
                     break;
                 }
             }
@@ -348,7 +357,8 @@
             winModal.style.display = 'flex';
         }
 
-        function resetAI() {
+        // Resets position but keeps Q-Table
+        function softReset() {
             isTesting = false;
             winModal.style.display = 'none';
             agentPos = { x: 0, y: 4 };
@@ -358,12 +368,18 @@
             scoreEl.innerText = 0;
             stepsEl.innerText = 0;
             lastMove = null;
-            initQ();
+            
             modeBadge.innerText = "Phase: Training";
             modeBadge.className = "text-[10px] uppercase font-bold bg-blue-500 px-2 py-1 rounded";
             document.getElementById('training-controls').classList.remove('hidden');
             document.getElementById('testing-controls').classList.add('hidden');
             createGrid();
+        }
+
+        // Resets everything including memory
+        function fullReset() {
+            initQ();
+            softReset();
         }
 
         const scenarios = [
