@@ -6,23 +6,91 @@
     <title>Lesson 2.1: Types of Machine Learning</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .learning-card {
-            transition: transform 0.2s;
+        .learning-card { transition: transform 0.2s; }
+        .learning-card:hover { transform: translateY(-5px); }
+        .hidden-answer { filter: blur(4px); cursor: pointer; transition: filter 0.3s; }
+        .hidden-answer:hover { filter: blur(0); }
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
         }
-        .learning-card:hover {
-            transform: translateY(-5px);
+        .grid-cell {
+            background: #e2e8f0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            position: relative;
         }
-        .hidden-answer {
-            filter: blur(4px);
-            cursor: pointer;
-            transition: filter 0.3s;
+        .cell-goal { background: #bbf7d0; border: 2px solid #22c55e; }
+        .cell-obstacle { background: #fecaca; }
+        .agent {
+            width: 80%;
+            height: 80%;
+            background: #6366f1;
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
         }
-        .hidden-answer:hover {
-            filter: blur(0);
+        .agent.testing { background: #f59e0b; box-shadow: 0 0 15px #f59e0b; }
+        .feedback-flash-reward { animation: reward-flash 0.5s; }
+        .feedback-flash-penalty { animation: penalty-flash 0.5s; }
+        @keyframes reward-flash {
+            0% { background-color: transparent; }
+            50% { background-color: rgba(34, 197, 94, 0.2); }
+            100% { background-color: transparent; }
+        }
+        @keyframes penalty-flash {
+            0% { background-color: transparent; }
+            50% { background-color: rgba(244, 63, 94, 0.2); }
+            100% { background-color: transparent; }
+        }
+        #win-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.9);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen pb-20">
+
+    <!-- Win Modal -->
+    <div id="win-modal">
+        <div class="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
+            <div id="win-icon" class="text-6xl mb-4">🎉</div>
+            <h2 id="win-title" class="text-3xl font-black text-slate-800 mb-2">Goal Reached!</h2>
+            <p id="win-desc" class="text-slate-500 mb-6 italic">The AI successfully learned the path through your feedback.</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-slate-100 p-3 rounded-lg">
+                    <p class="text-xs uppercase font-bold text-slate-400">Final Reward</p>
+                    <p id="final-reward" class="text-2xl font-bold text-emerald-600">0</p>
+                </div>
+                <div class="bg-slate-100 p-3 rounded-lg">
+                    <p class="text-xs uppercase font-bold text-slate-400">Total Steps</p>
+                    <p id="final-steps" class="text-2xl font-bold text-indigo-600">0</p>
+                </div>
+            </div>
+
+            <button onclick="resetAI()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95">
+                Restart Training
+            </button>
+        </div>
+    </div>
 
     <!-- Header Section -->
     <nav class="bg-indigo-900 text-white p-6 shadow-lg mb-8">
@@ -31,49 +99,73 @@
                 <h1 class="text-2xl font-bold">Standard 2.1: Machine Learning Types</h1>
                 <p class="text-indigo-200">Substitute Teacher Dashboard</p>
             </div>
-            <div class="text-right hidden sm:block">
-                <p class="text-xs uppercase tracking-widest text-indigo-300 font-semibold">AI High School</p>
-            </div>
         </div>
     </nav>
 
-    <main class="max-w-4xl mx-auto px-4 space-y-8">
+    <main id="main-container" class="max-w-4xl mx-auto px-4 space-y-8">
 
         <!-- Quick Reference Definitions -->
         <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="learning-card bg-purple-600 text-white p-6 rounded-xl shadow-md">
                 <h3 class="font-bold text-xl mb-2">Supervised</h3>
-                <p class="text-sm opacity-90">Learning with a teacher. Uses <strong>labeled data</strong> to make predictions.</p>
-                <div class="mt-4 text-xs font-mono bg-purple-700 p-2 rounded">Example: Spam Filters</div>
+                <p class="text-sm opacity-90">Learning with a teacher. Uses <strong>labeled data</strong>.</p>
             </div>
             <div class="learning-card bg-emerald-600 text-white p-6 rounded-xl shadow-md">
                 <h3 class="font-bold text-xl mb-2">Unsupervised</h3>
-                <p class="text-sm opacity-90">Learning by patterns. Finds <strong>hidden clusters</strong> in unlabeled data.</p>
-                <div class="mt-4 text-xs font-mono bg-emerald-700 p-2 rounded">Example: Customer Groups</div>
+                <p class="text-sm opacity-90">Learning by patterns. Finds <strong>hidden clusters</strong>.</p>
             </div>
             <div class="learning-card bg-rose-600 text-white p-6 rounded-xl shadow-md">
                 <h3 class="font-bold text-xl mb-2">Reinforcement</h3>
-                <p class="text-sm opacity-90">Learning by <strong>trial and error</strong>. Gets rewards or penalties for actions.</p>
-                <div class="mt-4 text-xs font-mono bg-rose-700 p-2 rounded">Example: Game-playing Bots</div>
+                <p class="text-sm opacity-90">Learning by <strong>trial and error</strong>. Rewards/Penalties.</p>
             </div>
         </section>
 
-        <!-- Main Activity: The Human Robot (RL) -->
+        <!-- Main Activity: The AI Trainer (RL) -->
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="bg-slate-800 p-4 text-white flex justify-between items-center">
-                <h2 class="font-bold">Activity 1: The Human Robot (RL Simulation)</h2>
-                <span class="text-xs bg-rose-500 px-2 py-1 rounded">Interactive Tool</span>
+                <h2 class="font-bold">Activity 1: Reinforcement Learning Lab</h2>
+                <div id="mode-badge" class="text-[10px] uppercase font-bold bg-blue-500 px-2 py-1 rounded">Phase: Training</div>
             </div>
             <div class="p-6">
-                <p class="mb-4 text-slate-600"><strong>Instructions:</strong> One student (the Robot) leaves the room. The class picks a task (e.g., "Open the window"). When the Robot returns, they get 10 points for a "good" move (clapping) and -5 for a "bad" move (silence).</p>
-                
-                <div class="bg-slate-100 rounded-xl p-8 text-center border-2 border-dashed border-slate-300">
-                    <h3 class="text-slate-500 uppercase text-xs font-bold tracking-widest mb-2">Current Reward Signal</h3>
-                    <div id="score" class="text-7xl font-black text-slate-800 mb-6">0</div>
-                    <div class="flex flex-wrap justify-center gap-4">
-                        <button onclick="updateScore(10)" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold shadow-md active:scale-95 transition-all">REWARD (+10)</button>
-                        <button onclick="updateScore(-5)" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-lg font-bold shadow-md active:scale-95 transition-all">PENALTY (-5)</button>
-                        <button onclick="resetScore()" class="bg-slate-300 hover:bg-slate-400 text-slate-700 px-6 py-3 rounded-lg font-bold transition-all">RESET</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <div>
+                        <div id="training-controls">
+                            <p class="mb-4 text-slate-600 font-bold text-sm">Step 1: Training Phase</p>
+                            <p class="mb-4 text-xs text-slate-500">Give the AI feedback to teach it a path. It will remember which moves you rewarded!</p>
+                            <div class="bg-slate-100 rounded-xl p-4 text-center border border-slate-200 mb-4">
+                                <div class="grid grid-cols-2 gap-2 mb-4">
+                                    <div>
+                                        <h3 class="text-slate-500 uppercase text-[10px] font-bold tracking-widest mb-1">Score</h3>
+                                        <div id="score" class="text-3xl font-black text-slate-800">0</div>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-slate-500 uppercase text-[10px] font-bold tracking-widest mb-1">Steps</h3>
+                                        <div id="steps" class="text-3xl font-black text-indigo-600">0</div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <button onclick="handleFeedback(10)" class="bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-lg font-bold shadow-md active:scale-95 transition-all">REWARD (+10)</button>
+                                    <button onclick="handleFeedback(-10)" class="bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-lg font-bold shadow-md active:scale-95 transition-all">PENALTY (-10)</button>
+                                </div>
+                            </div>
+                            <button onclick="startTesting()" class="w-full border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white font-bold py-2 rounded-lg transition-all">
+                                Finish Training & Test AI →
+                            </button>
+                        </div>
+                        <div id="testing-controls" class="hidden">
+                            <p class="mb-4 text-indigo-700 font-bold text-sm">Step 2: Testing Phase</p>
+                            <p class="mb-4 text-xs text-slate-500">The AI is now using its "Brain" (the rewards you gave) to find the goal without your help.</p>
+                            <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 text-center">
+                                <p class="text-indigo-800 font-bold animate-pulse">AI IS THINKING...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center">
+                        <div id="game-grid"></div>
+                        <div class="mt-4 flex gap-2">
+                            <button onclick="resetAI()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-2 rounded-md font-bold text-xs transition-colors">Reset Everything</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -85,86 +177,209 @@
                 <h2 class="font-bold">Activity 2: The ML Corner Game</h2>
             </div>
             <div class="p-6">
-                <p class="mb-6 text-slate-600 italic">"Designate three corners of the room as Supervised, Unsupervised, and Reinforcement. Read a scenario and have students move to the correct corner."</p>
-                
                 <div id="scenario-container" class="bg-indigo-50 border-l-4 border-indigo-500 p-6 rounded-r-xl">
                     <div id="scenario-text" class="text-xl font-medium text-indigo-900 mb-4 font-serif">Click the button to start the game.</div>
                     <div id="scenario-answer" class="hidden-answer inline-block bg-indigo-200 px-3 py-1 rounded text-indigo-800 font-bold text-sm">Hover to reveal answer</div>
                 </div>
-                
-                <button onclick="nextScenario()" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-indigo-200 transition-all">
-                    Next Scenario &rarr;
-                </button>
+                <button onclick="nextScenario()" class="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-md">Next Scenario &rarr;</button>
             </div>
         </section>
-
-        <!-- Discussion Prompts -->
-        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h2 class="font-bold text-slate-800 mb-4">Closing Discussion Questions</h2>
-            <ul class="space-y-4">
-                <li class="flex gap-4 items-start">
-                    <span class="bg-slate-200 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-sm">1</span>
-                    <p class="text-slate-700">How is Reinforcement Learning different from learning with a teacher (Supervised)?</p>
-                </li>
-                <li class="flex gap-4 items-start">
-                    <span class="bg-slate-200 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-sm">2</span>
-                    <p class="text-slate-700">Why is <strong>Unsupervised Learning</strong> often the hardest for us to notice in everyday life? (Hint: Think about grouping music or movies).</p>
-                </li>
-                <li class="flex gap-4 items-start">
-                    <span class="bg-slate-200 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-sm">3</span>
-                    <p class="text-slate-700">If you were building an AI to master a new video game, which type would you use? Why?</p>
-                </li>
-            </ul>
-        </section>
-
     </main>
 
-    <footer class="text-center text-slate-400 text-xs py-10">
-        AI High School | Lesson 2.1 | Machine Learning Fundamentals
-    </footer>
-
     <script>
-        // Score logic
-        let currentScore = 0;
+        const gridSize = 5;
+        const gridEl = document.getElementById('game-grid');
         const scoreEl = document.getElementById('score');
+        const stepsEl = document.getElementById('steps');
+        const mainContainer = document.getElementById('main-container');
+        const winModal = document.getElementById('win-modal');
+        const modeBadge = document.getElementById('mode-badge');
+        
+        let agentPos = { x: 0, y: 4 };
+        let prevPos = { x: 0, y: 4 };
+        let lastMove = null;
+        let goalPos = { x: 4, y: 0 };
+        let obstacles = [{ x: 2, y: 2 }, { x: 1, y: 1 }, { x: 3, y: 3 }];
+        let score = 0;
+        let stepCount = 0;
+        let isTesting = false;
+        
+        // The "Brain": remembers total reward for [x,y][direction]
+        let qTable = {}; 
 
-        function updateScore(points) {
-            currentScore += points;
-            scoreEl.innerText = currentScore;
-            // Visual feedback
-            scoreEl.classList.add('scale-110', points > 0 ? 'text-emerald-500' : 'text-rose-500');
-            setTimeout(() => {
-                scoreEl.classList.remove('scale-110', 'text-emerald-500', 'text-rose-500');
-            }, 200);
+        function initQ() {
+            for(let y=0; y<5; y++) {
+                for(let x=0; x<5; x++) {
+                    qTable[`${x},${y}`] = { "up": 0, "down": 0, "left": 0, "right": 0 };
+                }
+            }
         }
 
-        function resetScore() {
-            currentScore = 0;
-            scoreEl.innerText = 0;
+        function createGrid() {
+            gridEl.innerHTML = '';
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    if (x === goalPos.x && y === goalPos.y) cell.classList.add('cell-goal');
+                    if (obstacles.some(o => o.x === x && o.y === y)) cell.classList.add('cell-obstacle');
+                    if (x === agentPos.x && y === agentPos.y) {
+                        const agent = document.createElement('div');
+                        agent.className = 'agent' + (isTesting ? ' testing' : '');
+                        
+                        // Arrow logic:
+                        if (lastMove) {
+                            // Map direction to rotation degrees (assuming Arrow Up is base)
+                            const rotMap = { 'up': 0, 'right': 90, 'down': 180, 'left': -90 };
+                            // Insert SVG arrow
+                            agent.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="width:60%; height:60%; transform: rotate(${rotMap[lastMove]}deg)">
+                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>`;
+                        }
+
+                        cell.appendChild(agent);
+                    }
+                    gridEl.appendChild(cell);
+                }
+            }
         }
 
-        // Scenario logic
-        const scenarios = [
-            { text: "An AI looks at thousands of photos of fruit that are already tagged as 'Apple' or 'Orange'.", type: "Supervised Learning" },
-            { text: "A vacuum robot explores a room, getting points for every piece of dust it picks up and losing points when it bumps into a wall.", type: "Reinforcement Learning" },
-            { text: "A music app analyzes millions of songs and groups them into 5 new genres based on patterns it found on its own.", type: "Unsupervised Learning" },
-            { text: "A self-driving car learns to steer by running millions of simulations and trying to get the highest 'survival' score.", type: "Reinforcement Learning" },
-            { text: "An email program looks for common words like 'Free Money!' in emails that users previously marked as 'Junk'.", type: "Supervised Learning" },
-            { text: "A grocery store analyzes purchase data to see which items are usually bought together (like chips and salsa) without being told what to look for.", type: "Unsupervised Learning" }
-        ];
-
-        let currentScenarioIndex = -1;
-
-        function nextScenario() {
-            currentScenarioIndex++;
-            if (currentScenarioIndex >= scenarios.length) currentScenarioIndex = 0;
+        async function handleFeedback(points) {
+            if (isTesting) return;
             
-            const s = scenarios[currentScenarioIndex];
-            document.getElementById('scenario-text').innerText = s.text;
-            document.getElementById('scenario-answer').innerText = "Answer: " + s.type;
+            score += points;
+            stepCount++;
+            scoreEl.innerText = score;
+            stepsEl.innerText = stepCount;
+
+            // Update "Brain" based on the move that JUST happened
+            if (lastMove) {
+                qTable[`${prevPos.x},${prevPos.y}`][lastMove] += points;
+            }
+
+            const flashClass = points > 0 ? 'feedback-flash-reward' : 'feedback-flash-penalty';
+            mainContainer.classList.add(flashClass);
+            setTimeout(() => mainContainer.classList.remove(flashClass), 500);
+
+            if (points < 0) {
+                // When penalized, we backtrack
+                // We keep the arrow pointing to where we TRIED to go to show the error
+                agentPos = { ...prevPos };
+                createGrid();
+                await new Promise(r => setTimeout(r, 400));
+            }
+
+            makeNextMove();
         }
 
-        // Initialize first scenario
+        function makeNextMove() {
+            prevPos = { ...agentPos };
+            const dirs = [
+                { n: "up", x: 0, y: -1 }, { n: "down", x: 0, y: 1 }, 
+                { n: "left", x: -1, y: 0 }, { n: "right", x: 1, y: 0 }
+            ];
+
+            // Filter for moves that stay within the grid
+            const validDirs = dirs.filter(d => {
+                const newX = agentPos.x + d.x;
+                const newY = agentPos.y + d.y;
+                return newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize;
+            });
+            
+            let chosen;
+            if (isTesting) {
+                // Testing: Pick best known direction from valid options
+                const state = qTable[`${agentPos.x},${agentPos.y}`];
+                const sorted = validDirs.sort((a,b) => state[b.n] - state[a.n]);
+                // Very slight randomness for exploration if values are tied
+                chosen = Math.random() > 0.05 ? sorted[0] : validDirs[Math.floor(Math.random()*validDirs.length)];
+            } else {
+                // Training: Pick any valid random direction
+                chosen = validDirs[Math.floor(Math.random() * validDirs.length)];
+            }
+
+            lastMove = chosen.n;
+            agentPos.x += chosen.x;
+            agentPos.y += chosen.y;
+
+            createGrid();
+            if (agentPos.x === goalPos.x && agentPos.y === goalPos.y) {
+                setTimeout(showWinScreen, 400);
+            }
+        }
+
+        function startTesting() {
+            isTesting = true;
+            agentPos = { x: 0, y: 4 };
+            stepCount = 0;
+            stepsEl.innerText = 0;
+            modeBadge.innerText = "Phase: Testing AI";
+            modeBadge.className = "text-[10px] uppercase font-bold bg-amber-500 px-2 py-1 rounded";
+            document.getElementById('training-controls').classList.add('hidden');
+            document.getElementById('testing-controls').classList.remove('hidden');
+            createGrid();
+            runTestLoop();
+        }
+
+        async function runTestLoop() {
+            while (isTesting) {
+                await new Promise(r => setTimeout(r, 600));
+                if (!isTesting) break; 
+                stepCount++;
+                stepsEl.innerText = stepCount;
+                makeNextMove();
+                if (agentPos.x === goalPos.x && agentPos.y === goalPos.y) break;
+                if (stepCount > 50) {
+                    alert("The AI got lost! Try training it more consistently.");
+                    resetAI();
+                    break;
+                }
+            }
+        }
+
+        function showWinScreen() {
+            const wasTest = isTesting;
+            isTesting = false;
+            document.getElementById('final-reward').innerText = score;
+            document.getElementById('final-steps').innerText = stepCount;
+            document.getElementById('win-title').innerText = wasTest ? "AI Passed the Test!" : "Goal Reached!";
+            document.getElementById('win-desc').innerText = wasTest ? "It used its learned knowledge to find the path." : "Training complete! Now try testing it.";
+            winModal.style.display = 'flex';
+        }
+
+        function resetAI() {
+            isTesting = false;
+            winModal.style.display = 'none';
+            agentPos = { x: 0, y: 4 };
+            prevPos = { x: 0, y: 4 };
+            score = 0;
+            stepCount = 0;
+            scoreEl.innerText = 0;
+            stepsEl.innerText = 0;
+            lastMove = null;
+            initQ();
+            modeBadge.innerText = "Phase: Training";
+            modeBadge.className = "text-[10px] uppercase font-bold bg-blue-500 px-2 py-1 rounded";
+            document.getElementById('training-controls').classList.remove('hidden');
+            document.getElementById('testing-controls').classList.add('hidden');
+            createGrid();
+        }
+
+        const scenarios = [
+            { text: "A vacuum robot explores a room, getting points for every piece of dust it picks up.", type: "Reinforcement Learning" },
+            { text: "An AI looks at photos tagged as 'Apple' or 'Orange'.", type: "Supervised Learning" },
+            { text: "A music app groups songs into 5 new genres based on patterns.", type: "Unsupervised Learning" }
+        ];
+        let currentScenarioIndex = -1;
+        function nextScenario() {
+            currentScenarioIndex = (currentScenarioIndex + 1) % scenarios.length;
+            document.getElementById('scenario-text').innerText = scenarios[currentScenarioIndex].text;
+            document.getElementById('scenario-answer').innerText = "Answer: " + scenarios[currentScenarioIndex].type;
+        }
+
+        initQ();
+        createGrid();
         nextScenario();
     </script>
 </body>
