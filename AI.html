@@ -44,6 +44,7 @@
         .agent.testing { background: #f59e0b; box-shadow: 0 0 15px #f59e0b; }
         .feedback-flash-reward { animation: reward-flash 0.5s; }
         .feedback-flash-penalty { animation: penalty-flash 0.5s; }
+        
         @keyframes reward-flash {
             0% { background-color: transparent; }
             50% { background-color: rgba(34, 197, 94, 0.2); }
@@ -54,6 +55,23 @@
             50% { background-color: rgba(244, 63, 94, 0.2); }
             100% { background-color: transparent; }
         }
+        
+        /* Explosion Animations */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake-anim { animation: shake 0.5s; }
+
         #win-modal {
             display: none;
             position: fixed;
@@ -68,7 +86,7 @@
 </head>
 <body class="bg-slate-50 min-h-screen pb-20">
 
-    <!-- Win Modal -->
+    <!-- Result Modal (Win/Fail) -->
     <div id="win-modal">
         <div class="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
             <div id="win-icon" class="text-6xl mb-4">🎉</div>
@@ -176,17 +194,24 @@
             </div>
         </section>
 
-        <!-- Activity 2: Scenario Corner Game -->
+        <!-- Activity 2: Scenario Voting Game -->
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="bg-slate-800 p-4 text-white">
-                <h2 class="font-bold">Activity 2: The ML Corner Game</h2>
+                <h2 class="font-bold">Activity 2: The ML "Voting" Game</h2>
             </div>
             <div class="p-6">
+                <p class="mb-6 text-slate-600 italic">
+                    "Read a scenario aloud. Students vote at their desks using hand signals: 
+                    <br><strong>1 Finger = Supervised</strong>, 
+                    <strong>2 Fingers = Unsupervised</strong>, 
+                    <strong>3 Fingers = Reinforcement</strong>."
+                </p>
+                
                 <div id="scenario-container" class="bg-indigo-50 border-l-4 border-indigo-500 p-6 rounded-r-xl">
                     <div id="scenario-text" class="text-xl font-medium text-indigo-900 mb-4 font-serif">Click the button to start the game.</div>
                     <div id="scenario-answer" class="hidden-answer inline-block bg-indigo-200 px-3 py-1 rounded text-indigo-800 font-bold text-sm">Hover to reveal answer</div>
                 </div>
-                <button onclick="nextScenario()" class="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-md">Next Scenario &rarr;</button>
+                <button onclick="nextScenario()" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold shadow-md transition-all active:scale-95">Next Scenario &rarr;</button>
             </div>
         </section>
     </main>
@@ -295,12 +320,8 @@
                 chosen = Math.random() > 0.05 ? sorted[0] : validDirs[Math.floor(Math.random()*validDirs.length)];
             } else {
                 // Training: Mix of exploration (random) and exploitation (using what it learned)
-                // Find the best move based on current knowledge
                 const bestMove = validDirs.reduce((a, b) => (state[a.n] > state[b.n] ? a : b));
                 const bestScore = state[bestMove.n];
-
-                // If we have a good path (score > 0), take it 50% of the time
-                // This makes it look "smarter" as it learns, but still explores
                 if (bestScore > 0 && Math.random() > 0.5) {
                     chosen = bestMove;
                 } else {
@@ -313,6 +334,21 @@
             agentPos.y += chosen.y;
 
             createGrid();
+
+            // Check collision with obstacles during testing
+            if (isTesting && obstacles.some(o => o.x === agentPos.x && o.y === agentPos.y)) {
+                isTesting = false; // Stop the loop
+                setTimeout(() => {
+                    gridEl.classList.add('shake-anim');
+                    gridEl.innerHTML = '<div style="grid-column: 1/-1; grid-row: 1/-1; display:flex; align-items:center; justify-content:center; font-size: 8rem;">💥</div>';
+                    setTimeout(() => {
+                        gridEl.classList.remove('shake-anim');
+                        showFailScreen();
+                    }, 1000);
+                }, 300);
+                return;
+            }
+
             if (agentPos.x === goalPos.x && agentPos.y === goalPos.y) {
                 setTimeout(showWinScreen, 400);
             }
@@ -348,12 +384,22 @@
         }
 
         function showWinScreen() {
-            const wasTest = isTesting;
             isTesting = false;
+            document.getElementById('win-icon').innerText = "🎉";
+            document.getElementById('win-title').innerText = "Goal Reached!";
+            document.getElementById('win-desc').innerText = "The AI successfully learned the path through your feedback.";
             document.getElementById('final-reward').innerText = score;
             document.getElementById('final-steps').innerText = stepCount;
-            document.getElementById('win-title').innerText = wasTest ? "AI Passed the Test!" : "Goal Reached!";
-            document.getElementById('win-desc').innerText = wasTest ? "It used its learned knowledge to find the path." : "Training complete! Now try testing it.";
+            winModal.style.display = 'flex';
+        }
+
+        function showFailScreen() {
+            isTesting = false;
+            document.getElementById('win-icon').innerText = "💥";
+            document.getElementById('win-title').innerText = "Mission Failed!";
+            document.getElementById('win-desc').innerText = "The AI hit an obstacle! Training was not consistent enough.";
+            document.getElementById('final-reward').innerText = score;
+            document.getElementById('final-steps').innerText = stepCount;
             winModal.style.display = 'flex';
         }
 
@@ -383,9 +429,7 @@
             while(obstacles.length < 3) {
                 const ox = Math.floor(Math.random() * gridSize);
                 const oy = Math.floor(Math.random() * gridSize);
-                // Prevent spawning on Start (0,4) or Goal (4,0)
                 if ((ox === 0 && oy === 4) || (ox === 4 && oy === 0)) continue;
-                // Prevent duplicates
                 if (!obstacles.some(o => o.x === ox && o.y === oy)) {
                     obstacles.push({ x: ox, y: oy });
                 }
@@ -397,8 +441,17 @@
 
         const scenarios = [
             { text: "A vacuum robot explores a room, getting points for every piece of dust it picks up.", type: "Reinforcement Learning" },
-            { text: "An AI looks at photos tagged as 'Apple' or 'Orange'.", type: "Supervised Learning" },
-            { text: "A music app groups songs into 5 new genres based on patterns.", type: "Unsupervised Learning" }
+            { text: "An AI looks at thousands of photos that doctors have already tagged as 'Fracture' or 'No Fracture'.", type: "Supervised Learning" },
+            { text: "A music app analyzes millions of songs and groups them into new genres based on patterns, without any human labels.", type: "Unsupervised Learning" },
+            { text: "A self-driving car learns to stay in a lane by running simulations: getting points for staying safe and losing points for crashing.", type: "Reinforcement Learning" },
+            { text: "An email filter looks for words like 'Lottery' in emails that were previously marked as 'Spam' by users.", type: "Supervised Learning" },
+            { text: "A grocery store looks at sales data and finds that people who buy diapers also tend to buy beer, even though no one told the AI to look for that connection.", type: "Unsupervised Learning" },
+            { text: "A chess computer plays millions of games against itself, learning that losing a Queen usually leads to a loss (penalty).", type: "Reinforcement Learning" },
+            { text: "FaceID on your phone learns to recognize you by comparing your face to the scan you set up (labeled data).", type: "Supervised Learning" },
+            { text: "An online store suggests 'You might also like...' based on what other customers bought, finding patterns in shopping carts.", type: "Unsupervised Learning" },
+            { text: "A dog learns to sit because it gets a treat (reward) when it does it right and nothing when it ignores you.", type: "Reinforcement Learning (Analogy)" },
+            { text: "A bank's AI spots a stolen credit card because the transaction looks different from the owner's usual spending pattern.", type: "Unsupervised Learning (Anomaly Detection)" },
+            { text: "A weather app predicts 'Rain' tomorrow based on 50 years of past weather data where similar conditions led to rain.", type: "Supervised Learning" }
         ];
         let currentScenarioIndex = -1;
         function nextScenario() {
