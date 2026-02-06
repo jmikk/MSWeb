@@ -1,0 +1,782 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Play, RotateCcw, Brain, AlertCircle, CheckCircle2, XCircle, Users, Settings, RefreshCw, Gavel, HandMetal, Trophy, Eye } from 'lucide-react';
+
+// --- Constants & Types ---
+const SUITS = ['♠', '♥', '♦', '♣'];
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const RANK_VALUES = {
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14
+};
+
+const isRed = (suit) => ['♥', '♦'].includes(suit);
+
+// The "Truth" - The actual rules available for the user to select
+// EXPANDED for Advanced Mode
+const GAME_RULES = {
+  MATCH_SUIT: { id: 'MATCH_SUIT', name: 'Match Suit', check: (played, top) => played.suit === top.suit },
+  MATCH_RANK: { id: 'MATCH_RANK', name: 'Match Rank', check: (played, top) => played.rank === top.rank },
+  MATCH_COLOR: { id: 'MATCH_COLOR', name: 'Match Color', check: (played, top) => isRed(played.suit) === isRed(top.suit) },
+  ALTERNATE_COLOR: { id: 'ALTERNATE_COLOR', name: 'Alt. Color', check: (played, top) => isRed(played.suit) !== isRed(top.suit) },
+  HIGHER_RANK: { id: 'HIGHER_RANK', name: 'Higher Rank', check: (played, top) => RANK_VALUES[played.rank] > RANK_VALUES[top.rank] },
+  LOWER_RANK: { id: 'LOWER_RANK', name: 'Lower Rank', check: (played, top) => RANK_VALUES[played.rank] < RANK_VALUES[top.rank] },
+  EVEN_RANK: { id: 'EVEN_RANK', name: 'Even Rank (2,4,6,8,10,Q)', check: (played) => [2,4,6,8,10,12].includes(RANK_VALUES[played.rank]) },
+  ODD_RANK: { id: 'ODD_RANK', name: 'Odd Rank (3,5,7,9,J,K,A)', check: (played) => [3,5,7,9,11,13,14].includes(RANK_VALUES[played.rank]) },
+  RED_ONLY: { id: 'RED_ONLY', name: 'Red Cards Only', check: (played) => isRed(played.suit) },
+  BLACK_ONLY: { id: 'BLACK_ONLY', name: 'Black Cards Only', check: (played) => !isRed(played.suit) },
+};
+
+// The AI's Brain - Initial weights for each hypothesis
+const INITIAL_HYPOTHESES = Object.keys(GAME_RULES).reduce((acc, key) => {
+  acc[key] = 10; // Start with equal weight
+  return acc;
+}, {});
+
+// --- Helper Functions ---
+
+const createDeck = () => {
+  const deck = [];
+  for (const suit of SUITS) {
+    for (const rank of RANKS) {
+      deck.push({ suit, rank, id: `${rank}-${suit}-${Math.random()}` });
+    }
+  }
+  return shuffle(deck);
+};
+
+const shuffle = (array) => {
+  let currentIndex = array.length, randomIndex;
+  while (currentIndex !== 0) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+  }
+  return array;
+};
+
+const getCardColor = (suit) => isRed(suit) ? 'text-red-600' : 'text-slate-900';
+
+// --- Components ---
+
+const Card = ({ card, onClick, isPlayable = false, isSwapMode = false, hidden = false, small = false }) => {
+  if (hidden) {
+    return (
+      <div className={`
+        ${small ? 'w-10 h-14' : 'w-24 h-36'} 
+        bg-blue-900 rounded-xl border-2 border-slate-200 shadow-md flex items-center justify-center
+        overflow-hidden relative
+      `}>
+        {/* Solid Pattern for back of card */}
+        <div className="absolute inset-0 opacity-30 flex flex-wrap content-center justify-center">
+            <div className="w-[150%] h-[150%] bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-blue-400 to-transparent rotate-45 grid grid-cols-4 gap-1 p-2">
+                 {[...Array(20)].map((_, i) => <div key={i} className="w-full h-full border border-white/40 rounded-full"></div>)}
+            </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      onClick={() => isPlayable && onClick && onClick(card)}
+      className={`
+        ${small ? 'w-10 h-14 text-xs' : 'w-24 h-36 text-xl'} 
+        bg-white rounded-xl border-2 border-slate-300 shadow-xl flex flex-col justify-between p-2 select-none transition-all duration-200
+        ${isPlayable ? 'cursor-pointer hover:-translate-y-4 hover:shadow-2xl' : ''}
+        ${isPlayable && !isSwapMode ? 'ring-4 ring-offset-0 ring-blue-400 border-blue-500' : ''}
+        ${isPlayable && isSwapMode ? 'ring-4 ring-offset-0 ring-amber-500 border-amber-600' : ''}
+        ${getCardColor(card.suit)}
+      `}
+    >
+      <div className="flex justify-between leading-none font-bold text-lg">
+        <span>{card.rank}</span>
+        <span>{card.suit}</span>
+      </div>
+      
+      {/* Center Suit */}
+      <div className="flex justify-center items-center text-6xl pointer-events-none drop-shadow-sm pb-2">
+        {card.suit}
+      </div>
+      
+      <div className="flex justify-between leading-none rotate-180 font-bold text-lg">
+        <span>{card.rank}</span>
+        <span>{card.suit}</span>
+      </div>
+    </div>
+  );
+};
+
+// --- Main App ---
+
+export default function App() {
+  // Game Configuration State
+  const [activeRuleId, setActiveRuleId] = useState('MATCH_SUIT');
+  const [gameMode, setGameMode] = useState('STANDARD'); // STANDARD or ADVANCED
+  const [numPlayers, setNumPlayers] = useState(2); 
+  const [gameStarted, setGameStarted] = useState(false);
+
+  // Game Play State
+  const [deck, setDeck] = useState([]);
+  const [discardPile, setDiscardPile] = useState([]);
+  const [players, setPlayers] = useState([]); 
+  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
+  const [winner, setWinner] = useState(null);
+  const [showSummary, setShowSummary] = useState(false); // Controls the Winner Modal
+  const [gameLog, setGameLog] = useState([]);
+  const [isSwapMode, setIsSwapMode] = useState(false); 
+  
+  // Advanced Mode State
+  const [pendingAiMove, setPendingAiMove] = useState(null); // { playerIdx, card }
+
+  // AI State
+  const [aiHypotheses, setAiHypotheses] = useState(INITIAL_HYPOTHESES);
+  const [lastAiThinking, setLastAiThinking] = useState("");
+  const [learningRate, setLearningRate] = useState(5); 
+
+  // --- Game Engine Methods ---
+
+  const addLog = (msg, type = 'info') => {
+    setGameLog(prev => [{ msg, type, id: Math.random() }, ...prev].slice(0, 50));
+  };
+
+  const initializeGame = () => {
+    const newDeck = createDeck();
+    const newPlayers = [];
+    
+    // Human
+    newPlayers.push({ id: 'Human', type: 'human', hand: newDeck.splice(0, 5) });
+    
+    // AI Players
+    for (let i = 1; i < numPlayers; i++) {
+      newPlayers.push({ id: `AI ${i}`, type: 'ai', hand: newDeck.splice(0, 5) });
+    }
+
+    const firstCard = newDeck.pop();
+    
+    setDeck(newDeck);
+    setPlayers(newPlayers);
+    setDiscardPile([firstCard]);
+    setCurrentPlayerIdx(0);
+    setWinner(null);
+    setShowSummary(false);
+    setAiHypotheses(INITIAL_HYPOTHESES); 
+    setGameLog([]);
+    setIsSwapMode(false);
+    setPendingAiMove(null);
+
+    const ruleMsg = gameMode === 'STANDARD' 
+      ? `Secret Rule: ${GAME_RULES[activeRuleId].name}.` 
+      : `ADVANCED MODE: YOU are the Referee. Teach the AI your custom rule!`;
+    
+    addLog(`Game started! ${ruleMsg}`, 'system');
+    setGameStarted(true);
+  };
+
+  const drawCard = (playerIdx, amount = 1, reason = "") => {
+    if (deck.length < amount) {
+      if (discardPile.length > 1) {
+        const top = discardPile[discardPile.length - 1];
+        const rest = discardPile.slice(0, discardPile.length - 1);
+        const newDeck = shuffle([...deck, ...rest]);
+        setDeck(newDeck);
+        setDiscardPile([top]);
+        addLog("Reshuffling discard pile...", "system");
+      } else {
+        addLog("Deck empty! Cannot draw.", "error");
+        return;
+      }
+    }
+
+    let currentDeck = [...deck];
+    if(currentDeck.length === 0) return;
+
+    const cardsDrawn = [];
+    for(let i=0; i<amount; i++) {
+        if(currentDeck.length > 0) cardsDrawn.push(currentDeck.pop());
+    }
+
+    setDeck(currentDeck);
+
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx === playerIdx) {
+        return { ...p, hand: [...p.hand, ...cardsDrawn] };
+      }
+      return p;
+    }));
+
+    const playerName = players[playerIdx].id;
+    addLog(`${playerName} drew ${amount} card(s)${reason ? ` (${reason})` : ''}.`, 'neutral');
+  };
+
+  // The Referee
+  const checkMove = (card) => {
+    const topCard = discardPile[discardPile.length - 1];
+    return GAME_RULES[activeRuleId].check(card, topCard);
+  };
+
+  const handlePlayCard = (playerIdx, card, manualValidation = null) => {
+    const player = players[playerIdx];
+    
+    // In Advanced Mode, we use manualValidation (bool) if provided
+    // In Standard Mode, we use checkMove()
+    const isValid = manualValidation !== null ? manualValidation : checkMove(card);
+
+    if (isValid) {
+      // Success Logic
+      setPlayers(prev => prev.map((p, idx) => {
+        if (idx === playerIdx) {
+          return { ...p, hand: p.hand.filter(c => c.id !== card.id) };
+        }
+        return p;
+      }));
+      setDiscardPile(prev => [...prev, card]);
+      addLog(`${player.id} played ${card.rank}${card.suit} (Approved)`, 'success');
+
+      if (player.type === 'ai') {
+        reinforceAI(card, true);
+      }
+
+      if (player.hand.length - 1 === 0) {
+        setWinner(player.id);
+        setShowSummary(true); // Show the summary screen
+        addLog(`${player.id} Wins!`, 'success');
+        return; 
+      }
+
+      advanceTurn();
+
+    } else {
+      // Failure Logic
+      addLog(`${player.id} tried ${card.rank}${card.suit} - REJECTED!`, 'error');
+      
+      drawCard(playerIdx, 2, "Penalty");
+
+      if (player.type === 'ai') {
+        reinforceAI(card, false);
+      }
+      
+      advanceTurn();
+    }
+  };
+
+  const handleForceDiscard = (playerIdx, card) => {
+    const player = players[playerIdx];
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx === playerIdx) {
+        return { ...p, hand: p.hand.filter(c => c.id !== card.id) };
+      }
+      return p;
+    }));
+    setDiscardPile(prev => [...prev, card]);
+    drawCard(playerIdx, 1, "Swap");
+    addLog(`${player.id} swapped ${card.rank}${card.suit} (Target Changed)`, 'neutral');
+    setIsSwapMode(false);
+    advanceTurn();
+  };
+
+  const advanceTurn = () => {
+    setCurrentPlayerIdx(prev => (prev + 1) % players.length);
+  };
+
+  // --- AI Logic ---
+
+  const reinforceAI = (cardPlayed, wasSuccessful) => {
+    const topCard = discardPile[discardPile.length - 1]; 
+    
+    setAiHypotheses(prev => {
+      const newWeights = { ...prev };
+      
+      Object.keys(GAME_RULES).forEach(ruleKey => {
+        // If this rule WOULD have allowed this move...
+        // Note: For user-defined rules in advanced mode, we are basically
+        // filtering the list of possible rules to find one that fits the user's pattern
+        const wouldAllow = GAME_RULES[ruleKey].check(cardPlayed, topCard);
+        
+        if (wasSuccessful) {
+          if (wouldAllow) {
+            newWeights[ruleKey] += learningRate; 
+          }
+        } else {
+          // If the move failed, but this rule said it was okay -> this rule is WRONG.
+          if (wouldAllow) {
+            newWeights[ruleKey] = Math.max(0, newWeights[ruleKey] - learningRate);
+          }
+        }
+      });
+      return newWeights;
+    });
+  };
+
+  const runAITurn = useCallback(() => {
+    const player = players[currentPlayerIdx];
+    if (!player || player.type !== 'ai') return;
+    if (pendingAiMove) return; // Wait for user
+
+    setTimeout(() => {
+        const hand = player.hand;
+        const topCard = discardPile[discardPile.length - 1];
+
+        // 1. Identify Strongest Hypothesis
+        let bestRuleKey = null;
+        let maxWeight = -1;
+        
+        Object.entries(aiHypotheses).forEach(([key, weight]) => {
+            if (weight > maxWeight) {
+                maxWeight = weight;
+                bestRuleKey = key;
+            } else if (weight === maxWeight) {
+                if (Math.random() > 0.5) bestRuleKey = key;
+            }
+        });
+
+        const believedRule = GAME_RULES[bestRuleKey];
+        const believedConfidence = maxWeight;
+        
+        // 2. Select Card
+        const playableCards = hand.filter(card => believedRule.check(card, topCard));
+        let cardToPlay;
+        let action = 'play';
+
+        if (playableCards.length > 0) {
+             cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)];
+             setLastAiThinking(`${player.id} thinks rule is "${believedRule.name}"`);
+        } else {
+            // Exploration / Desperation
+            const randomCard = hand[Math.floor(Math.random() * hand.length)];
+            if (Math.random() > 0.5 || believedConfidence > 25) {
+                action = 'swap';
+                cardToPlay = randomCard;
+                setLastAiThinking(`${player.id} is stuck. Swapping.`);
+            } else {
+                action = 'play';
+                cardToPlay = randomCard;
+                setLastAiThinking(`${player.id} is guessing randomly.`);
+            }
+        }
+
+        // 3. Execution based on Mode
+        if (action === 'swap') {
+             handleForceDiscard(currentPlayerIdx, cardToPlay);
+        } else {
+             if (gameMode === 'ADVANCED') {
+                 // Pause for User Feedback
+                 setPendingAiMove({ playerIdx: currentPlayerIdx, card: cardToPlay });
+             } else {
+                 // Standard Auto-Play
+                 handlePlayCard(currentPlayerIdx, cardToPlay);
+             }
+        }
+
+    }, 1500);
+  }, [currentPlayerIdx, players, aiHypotheses, discardPile, gameMode, pendingAiMove]);
+
+  // Effect to trigger AI turn
+  useEffect(() => {
+    if (gameStarted && !winner && !pendingAiMove) {
+      const currentPlayer = players[currentPlayerIdx];
+      if (currentPlayer?.type === 'ai') {
+        runAITurn();
+      }
+    }
+  }, [currentPlayerIdx, gameStarted, winner, players, runAITurn, pendingAiMove]);
+
+
+  // --- Render ---
+
+  if (!gameStarted) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white font-sans">
+        <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700">
+          <div className="flex justify-center mb-6">
+            <Brain className="w-16 h-16 text-emerald-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-center mb-2">Rule Learner AI</h1>
+          <p className="text-slate-400 text-center mb-6">
+            Teach an AI to play your card game using reinforcement learning.
+          </p>
+
+          <div className="space-y-6">
+            
+            {/* Mode Switcher */}
+            <div className="bg-slate-900 p-1 rounded-lg flex text-sm font-bold mb-4">
+               <button 
+                onClick={() => setGameMode('STANDARD')}
+                className={`flex-1 py-2 rounded-md transition-colors ${gameMode === 'STANDARD' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+               >
+                 Standard
+               </button>
+               <button 
+                onClick={() => setGameMode('ADVANCED')}
+                className={`flex-1 py-2 rounded-md transition-colors ${gameMode === 'ADVANCED' ? 'bg-emerald-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+               >
+                 Advanced (Trainer)
+               </button>
+            </div>
+
+            {gameMode === 'STANDARD' ? (
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Secret Rule</label>
+                    <select 
+                        value={activeRuleId} 
+                        onChange={(e) => setActiveRuleId(e.target.value)}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    >
+                        {Object.values(GAME_RULES).map(rule => (
+                        <option key={rule.id} value={rule.id}>{rule.name}</option>
+                        ))}
+                    </select>
+                </div>
+            ) : (
+                <div className="bg-emerald-900/30 border border-emerald-500/30 p-4 rounded-lg">
+                    <h3 className="text-emerald-400 font-bold mb-1 flex items-center gap-2"><Gavel className="w-4 h-4"/> Trainer Mode</h3>
+                    <p className="text-xs text-slate-300">
+                        The AI knows nothing. You will be the referee. When the AI plays a card, you click 
+                        <span className="text-green-400 font-bold"> APPROVE</span> or 
+                        <span className="text-red-400 font-bold"> REJECT</span>. 
+                        Think of a rule in your head (e.g., "Must be Even") and train the AI to find it!
+                    </p>
+                </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Number of Players</label>
+              <div className="flex gap-4">
+                {[2, 3, 4].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setNumPlayers(n)}
+                    className={`flex-1 p-3 rounded-lg border ${numPlayers === n ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-700 border-slate-600 hover:bg-slate-600'}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button 
+              onClick={initializeGame}
+              className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Play className="w-5 h-5" /> Start Experiment
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentPlayer = players[currentPlayerIdx];
+  const isHumanTurn = currentPlayer?.type === 'human';
+  const humanPlayer = players.find(p => p.type === 'human');
+
+  return (
+    <div className="min-h-screen bg-emerald-900 text-slate-100 font-sans overflow-hidden flex flex-col md:flex-row">
+      
+      {/* LEFT PANEL: Game Board */}
+      <div className="flex-1 relative flex flex-col h-screen max-h-screen">
+        
+        {/* Top Bar */}
+        <div className="h-16 bg-emerald-950/50 flex items-center justify-between px-6 border-b border-emerald-800">
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm text-emerald-200">
+                {gameMode === 'STANDARD' ? (
+                    <>Rule: <span className="font-bold text-white">{GAME_RULES[activeRuleId].name}</span></>
+                ) : (
+                    <span className="font-bold text-yellow-400 animate-pulse">TRAINER MODE: You are the Referee</span>
+                )}
+            </span>
+          </div>
+          {/* If the game is over (winner exists), we show "Play Again" or "Menu" button instead of "End Game" */}
+          <button onClick={() => setGameStarted(false)} className="text-xs bg-red-900/50 hover:bg-red-900 px-3 py-1 rounded text-red-200 border border-red-800">
+            Exit to Menu
+          </button>
+        </div>
+
+        {/* Play Area */}
+        <div className="flex-1 p-4 relative flex flex-col items-center justify-center">
+          
+          {/* Opponents */}
+          <div className="flex gap-8 mb-8">
+            {players.filter(p => p.type === 'ai').map((p, idx) => (
+              <div key={p.id} className={`
+                flex flex-col items-center transition-opacity duration-300
+                ${currentPlayer.id === p.id ? 'opacity-100 scale-110' : 'opacity-80'}
+              `}>
+                <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border-2 border-slate-600 mb-2 relative">
+                  <Brain className="w-6 h-6 text-purple-400" />
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full text-[10px] flex items-center justify-center border border-white">
+                    {p.hand.length}
+                  </span>
+                </div>
+                <span className="text-xs font-bold">{p.id}</span>
+                {lastAiThinking && currentPlayer.id === p.id && (
+                  <div className="absolute top-16 w-48 bg-white/10 backdrop-blur-md p-2 rounded text-[10px] text-center border border-white/20 animate-pulse">
+                     {lastAiThinking}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* PENDING APPROVAL MODAL (Advanced Mode) */}
+          {pendingAiMove && (
+             <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl border border-slate-600 flex flex-col items-center animate-in zoom-in-95 duration-200">
+                    <h3 className="text-xl font-bold text-white mb-4">Referee Call</h3>
+                    <div className="flex gap-8 items-center mb-6">
+                        <div className="text-center">
+                            <span className="text-xs uppercase text-slate-400 font-bold tracking-widest block mb-1">Top Card</span>
+                            <div className="scale-75 origin-top"><Card card={discardPile[discardPile.length-1]} /></div>
+                        </div>
+                        <div className="text-2xl text-slate-500">vs</div>
+                        <div className="text-center">
+                            <span className="text-xs uppercase text-slate-400 font-bold tracking-widest block mb-1">AI Played</span>
+                            <div className="scale-90"><Card card={pendingAiMove.card} /></div>
+                        </div>
+                    </div>
+                    <div className="text-sm text-slate-300 mb-6 text-center max-w-xs">
+                        Does this move fit the rule you are thinking of?
+                    </div>
+                    <div className="flex gap-4 w-full">
+                        <button 
+                            onClick={() => {
+                                handlePlayCard(pendingAiMove.playerIdx, pendingAiMove.card, false);
+                                setPendingAiMove(null);
+                            }}
+                            className="flex-1 bg-red-600 hover:bg-red-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                        >
+                            <XCircle className="w-5 h-5" /> REJECT
+                        </button>
+                        <button 
+                            onClick={() => {
+                                handlePlayCard(pendingAiMove.playerIdx, pendingAiMove.card, true);
+                                setPendingAiMove(null);
+                            }}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle2 className="w-5 h-5" /> APPROVE
+                        </button>
+                    </div>
+                </div>
+             </div>
+          )}
+
+          {/* Center Table */}
+          <div className="flex items-center gap-12 my-4">
+            {/* Draw Pile */}
+            <div className="relative group cursor-pointer" onClick={() => isHumanTurn && drawCard(currentPlayerIdx)}>
+               {deck.length > 0 ? (
+                 <>
+                   <div className="absolute top-1 left-1 w-24 h-36 bg-blue-900 rounded-lg border border-white/20"></div>
+                   <div className="absolute top-0.5 left-0.5 w-24 h-36 bg-blue-900 rounded-lg border border-white/20"></div>
+                   <Card hidden /> 
+                   <span className="absolute -bottom-8 left-0 w-full text-center text-xs font-bold text-emerald-200 uppercase tracking-widest">Draw ({deck.length})</span>
+                 </>
+               ) : (
+                 <div className="w-24 h-36 border-2 border-dashed border-emerald-600 rounded-lg flex items-center justify-center opacity-50">Empty</div>
+               )}
+            </div>
+
+            {/* Discard Pile */}
+            <div className="relative">
+              {discardPile.length > 0 ? (
+                <div className="relative">
+                   {/* Only show the top card, no stack effect underneath */}
+                   <Card card={discardPile[discardPile.length-1]} />
+                </div>
+              ) : (
+                <div className="w-24 h-36 border-2 border-dashed border-emerald-600 rounded-lg"></div>
+              )}
+              <span className="absolute -bottom-8 left-0 w-full text-center text-xs font-bold text-emerald-200 uppercase tracking-widest">Played</span>
+            </div>
+          </div>
+
+          {/* Winner Overlay - ENHANCED SUMMARY SCREEN */}
+          {winner && showSummary && (
+            <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex items-center justify-center p-8 animate-in fade-in duration-500">
+              <div className="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8 flex flex-col items-center">
+                <div className="w-20 h-20 bg-yellow-500 rounded-full flex items-center justify-center mb-6 shadow-lg animate-bounce">
+                  <Trophy className="w-10 h-10 text-yellow-900" />
+                </div>
+                
+                <h2 className="text-4xl font-bold text-white mb-2">{winner} Wins!</h2>
+                <p className="text-slate-400 mb-8">Game Completed</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-8">
+                  {/* Secret Rule Reveal */}
+                  <div className="bg-slate-700/50 p-6 rounded-xl border border-slate-600 flex flex-col items-center justify-center text-center">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">The Rule Was</h3>
+                    <div className="text-2xl font-bold text-emerald-400">
+                      {gameMode === 'STANDARD' ? GAME_RULES[activeRuleId].name : "Custom User Rule"}
+                    </div>
+                  </div>
+
+                  {/* AI Final Brain State */}
+                  <div className="bg-slate-700/50 p-6 rounded-xl border border-slate-600">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">AI's Top 3 Beliefs</h3>
+                    <div className="space-y-3">
+                      {Object.entries(aiHypotheses)
+                        .sort((a,b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([key, weight], idx) => {
+                          const rule = GAME_RULES[key];
+                          const max = Math.max(...Object.values(aiHypotheses));
+                          return (
+                            <div key={key}>
+                              <div className="flex justify-between text-xs text-slate-300 mb-1">
+                                <span>{idx + 1}. {rule.name}</span>
+                                <span>{Math.round(weight)}</span>
+                              </div>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                 <div className={`h-full ${idx === 0 ? 'bg-purple-400' : 'bg-slate-500'}`} style={{width: `${Math.min(100, (weight / max) * 100)}%`}}></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setShowSummary(false)}
+                    className="px-6 py-3 bg-slate-700 text-white rounded-xl font-bold hover:bg-slate-600 transition-colors flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4"/> View Board
+                  </button>
+                  <button 
+                    onClick={initializeGame}
+                    className="px-6 py-3 bg-emerald-500 text-slate-900 rounded-xl font-bold hover:bg-emerald-400 transition-transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Play Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Mini "Game Over" Banner if Summary is closed */}
+          {winner && !showSummary && (
+             <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-yellow-900 px-6 py-2 rounded-full font-bold shadow-lg animate-bounce z-40 flex items-center gap-4">
+                <span>🏆 {winner} Won!</span>
+                <button onClick={() => setShowSummary(true)} className="underline text-xs">Show Summary</button>
+             </div>
+          )}
+        </div>
+
+        {/* Player Hand */}
+        <div className="h-64 bg-emerald-950/30 border-t border-emerald-800 p-4 flex flex-col items-center justify-end relative">
+            <div className={`
+              absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 rounded-full text-xs font-bold border flex items-center gap-2
+              ${isHumanTurn ? 'bg-yellow-400 text-yellow-900 border-yellow-200' : 'bg-slate-800 text-slate-400 border-slate-600'}
+            `}>
+               {isHumanTurn && "Your Turn"}
+               {!isHumanTurn && `${currentPlayer.id}'s Turn`}
+            </div>
+
+             {/* Action Bar for Human */}
+             {isHumanTurn && (
+              <div className="absolute top-4 right-4 flex gap-2">
+                 <button 
+                  onClick={() => setIsSwapMode(!isSwapMode)}
+                  className={`
+                    flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold border transition-colors shadow-lg
+                    ${isSwapMode 
+                      ? 'bg-amber-500 text-white border-amber-300 animate-pulse' 
+                      : 'bg-emerald-800 text-emerald-200 border-emerald-700 hover:bg-emerald-700'}
+                  `}
+                 >
+                   <RefreshCw className="w-4 h-4" />
+                   {isSwapMode ? 'Select Card to Discard' : 'Discard & Draw'}
+                 </button>
+              </div>
+            )}
+
+            <div className="flex justify-center items-end w-full pb-4 px-12 overflow-visible">
+              {humanPlayer?.hand.map((card, idx) => (
+                <div 
+                  key={card.id} 
+                  className="transition-all duration-300 hover:-translate-y-6 hover:scale-110 hover:z-50 -ml-8 first:ml-0 relative shadow-2xl"
+                  style={{ transformOrigin: 'bottom center' }}
+                >
+                  <Card 
+                    card={card} 
+                    isPlayable={isHumanTurn} 
+                    isSwapMode={isSwapMode}
+                    onClick={() => {
+                      if (isSwapMode) {
+                        handleForceDiscard(players.findIndex(p => p.type === 'human'), card);
+                      } else {
+                        // In advanced mode, if Human plays, we assume THEY know their own rule
+                        // So we treat it as valid.
+                        handlePlayCard(players.findIndex(p => p.type === 'human'), card, true);
+                      }
+                    }} 
+                  />
+                </div>
+              ))}
+            </div>
+            {isSwapMode && isHumanTurn && (
+               <div className="text-amber-300 text-sm font-bold mt-2 animate-bounce">Select a card to swap (changes target, no penalty)</div>
+            )}
+        </div>
+      </div>
+
+      {/* RIGHT PANEL: AI Brain & Logs */}
+      <div className="w-full md:w-80 bg-slate-900 border-l border-slate-700 flex flex-col h-[40vh] md:h-screen">
+        
+        {/* Brain Stats */}
+        <div className="p-4 border-b border-slate-700">
+          <div className="flex items-center gap-2 mb-4">
+            <Brain className="w-5 h-5 text-purple-400" />
+            <h3 className="font-bold text-slate-200">AI Logic Model</h3>
+          </div>
+          
+          <div className="space-y-3">
+            {Object.entries(aiHypotheses).sort((a,b) => b[1] - a[1]).map(([key, weight]) => {
+              const rule = GAME_RULES[key];
+              const maxVal = Math.max(...Object.values(aiHypotheses));
+              const percent = maxVal === 0 ? 0 : (weight / maxVal) * 100;
+              
+              // Only show relevant rules to avoid clutter in UI, or top 5
+              if (percent < 5 && weight < 5) return null;
+
+              return (
+                <div key={key} className="text-xs">
+                  <div className="flex justify-between mb-1 text-slate-400">
+                    <span>{rule.name}</span>
+                    <span>{Math.round(weight)} pts</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-500 ${weight === maxVal ? 'bg-purple-500' : 'bg-slate-600'}`}
+                      style={{ width: `${Math.min(100, (weight / (Math.max(...Object.values(INITIAL_HYPOTHESES)) * 3)) * 100)}%` }} // Scaling relative to start
+                    ></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Logs */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs">
+          <h3 className="text-slate-500 font-bold mb-2 uppercase tracking-wider">Game Log</h3>
+          {gameLog.map((log) => (
+            <div key={log.id} className={`
+              p-2 rounded border-l-2
+              ${log.type === 'success' ? 'bg-green-900/20 border-green-500 text-green-200' : ''}
+              ${log.type === 'error' ? 'bg-red-900/20 border-red-500 text-red-200' : ''}
+              ${log.type === 'info' ? 'bg-blue-900/20 border-blue-500 text-blue-200' : ''}
+              ${log.type === 'neutral' ? 'bg-slate-800/50 border-slate-600 text-slate-400' : ''}
+              ${log.type === 'system' ? 'text-yellow-500 border-yellow-500 font-bold mt-4' : ''}
+            `}>
+              {log.msg}
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
