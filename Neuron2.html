@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Network Explorer (3x3x1)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            overflow-x: hidden;
+        }
+
+        /* Compact Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            margin-top: -4px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+
+        /* Node Styles */
+        .node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .active-node {
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+            border-color: #22c55e !important;
+            background-color: #f0fdf4 !important;
+        }
+        .inactive-node {
+            border-color: #cbd5e1 !important;
+            background-color: #ffffff !important;
+        }
+
+        /* Line SVG Layer */
+        #connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Weight Controls - Now embedded */
+        .weight-box {
+            background: #f1f5f9;
+            border-radius: 4px;
+            padding: 2px 4px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            font-size: 10px;
+        }
+
+        .layer-title {
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 1rem;
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3 shadow-sm z-30 flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-bold text-slate-800">Deep Network Explorer</h1>
+            <p class="text-xs text-slate-500">Architecture: 3 Inputs &rarr; 3 Hidden &rarr; 1 Output</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="randomizeWeights()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-bold transition">🎲 Randomize Weights</button>
+            <button onclick="resetNetwork()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-bold transition">↺ Reset</button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow flex items-center justify-center p-2 relative overflow-hidden">
+        
+        <!-- SVG Canvas -->
+        <svg id="connections" xmlns="http://www.w3.org/2000/svg"></svg>
+        
+        <div class="relative w-full max-w-5xl flex justify-between items-stretch py-8 px-4 h-full min-h-[600px]">
+
+            <!-- COLUMN 1: INPUTS (3 Nodes) -->
+            <div class="flex flex-col justify-around relative z-10 w-32">
+                <div class="layer-title">Inputs</div>
+                <div id="input-container" class="flex flex-col justify-around h-full gap-4">
+                    <!-- Inputs injected by JS -->
+                </div>
+            </div>
+
+            <!-- COLUMN 2: HIDDEN LAYER (3 Nodes) -->
+            <div class="flex flex-col justify-center relative z-10 w-32">
+                <div class="layer-title">Hidden Layer</div>
+                <div id="h1-container" class="flex flex-col gap-12 justify-center items-center h-full">
+                    <!-- H1 Nodes injected by JS -->
+                </div>
+            </div>
+
+            <!-- COLUMN 3: OUTPUT (1 Node) -->
+            <div class="flex flex-col justify-center relative z-10 w-32 items-center">
+                <div class="layer-title">Output</div>
+                
+                <div class="flex flex-col items-center">
+                    <div id="out-circle" class="node w-24 h-24 rounded-full border-4 flex flex-col items-center justify-center bg-white shadow-lg inactive-node relative z-10">
+                        <span id="out-val" class="text-2xl font-bold text-slate-300">0</span>
+                    </div>
+                    
+                    <!-- Output Bias -->
+                    <div class="mt-4 bg-slate-50 border border-slate-200 rounded px-2 py-1 w-24 z-20">
+                        <div class="flex justify-between text-[9px] text-slate-500 font-bold uppercase">
+                            <span>Bias</span>
+                            <span id="txt-bias-out">0.0</span>
+                        </div>
+                        <input type="range" id="bias-out" min="-3" max="3" step="0.1" value="0" class="w-full h-1" oninput="updateNetwork()">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 p-2 text-center text-[10px] text-slate-400">
+        Weights range: -3.0 to +3.0 &nbsp;|&nbsp; Activation: Step Function (Sum > 0)
+    </footer>
+
+    <script>
+        // --- CONFIGURATION ---
+        const config = {
+            inputs: 3,
+            h1: 3,
+            output: 1
+        };
+
+        let weights = {}; // Will hold 'fromId-toId': value
+        let biases = {};  // Will hold 'nodeId': value
+
+        // --- DOM GENERATION ---
+        function generateDOM() {
+            // 1. Generate Inputs
+            const inContainer = document.getElementById('input-container');
+            let inHtml = '';
+            const icons = ['☀️', '🍕', '🚗']; 
+            
+            for(let i=0; i<config.inputs; i++) {
+                // Generate Weight Sliders HTML for this input
+                let weightsHtml = '';
+                for(let j=0; j<config.h1; j++) {
+                    const id = `i${i}-h1_${j}`;
+                    weightsHtml += `
+                        <div id="control-${id}" class="weight-box w-full" title="Weight to Hidden Node ${j+1}">
+                            <span class="font-mono font-bold text-slate-400">w${j+1}</span>
+                            <input type="range" min="-3" max="3" step="0.1" value="0" class="w-full mx-1" oninput="updateWeight('${id}', this.value)">
+                            <span id="val-${id}" class="font-mono font-bold text-blue-600 w-4 text-right">0</span>
+                        </div>
+                    `;
+                }
+
+                inHtml += `
+                    <div class="bg-white p-3 rounded shadow border border-slate-200 z-10 w-full flex flex-col gap-2" id="node-i${i}">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div class="text-xl">${icons[i]}</div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="input${i}" class="sr-only peer" onchange="updateNetwork()">
+                                <div class="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500"></div>
+                            </label>
+                        </div>
+                        <div class="space-y-1">
+                             <div class="text-[9px] font-bold text-slate-400 uppercase text-center mb-1">Weights</div>
+                            ${weightsHtml}
+                        </div>
+                    </div>`;
+            }
+            inContainer.innerHTML = inHtml;
+
+            // 2. Generate Hidden Layer 1
+            const h1Container = document.getElementById('h1-container');
+            let h1Html = '';
+            for(let i=0; i<config.h1; i++) {
+                // Generate Outgoing Weight HTML
+                const id = `h1_${i}-out`;
+                const weightHtml = `
+                    <div id="control-${id}" class="weight-box mt-2 w-24">
+                         <span class="font-mono font-bold text-slate-400">Out</span>
+                        <input type="range" min="-3" max="3" step="0.1" value="0" class="w-full mx-1" oninput="updateWeight('${id}', this.value)">
+                        <span id="val-${id}" class="font-mono font-bold text-blue-600 w-4 text-right">0</span>
+                    </div>
+                `;
+
+                h1Html += `
+                <div class="flex flex-col items-center group relative z-10">
+                    <div id="h1-${i}-circle" class="node w-20 h-20 rounded-full border-2 flex items-center justify-center bg-white shadow inactive-node">
+                        <span id="h1-${i}-sum" class="text-sm font-mono font-bold text-slate-400">0.0</span>
+                    </div>
+                    
+                    ${weightHtml}
+
+                    <div class="absolute -top-6 bg-slate-50 border border-slate-200 rounded px-1 py-1 w-20 pointer-events-auto">
+                         <div class="flex justify-between text-[8px] text-slate-500 font-bold uppercase">
+                            <span>Bias</span>
+                            <span id="disp-bias-h1-${i}">0</span>
+                        </div>
+                        <input type="range" id="bias-h1-${i}" min="-3" max="3" step="0.1" value="0" class="w-full h-1" oninput="updateNetwork()">
+                    </div>
+                </div>`;
+            }
+            h1Container.innerHTML = h1Html;
+
+            // 4. Initialize Data Structures for Weights
+            initializeWeights();
+            
+            // 5. Create Connection Lines
+            createLines();
+        }
+
+        function initializeWeights() {
+            // Inputs -> H1
+            for(let i=0; i<config.inputs; i++) {
+                for(let j=0; j<config.h1; j++) {
+                    const id = `i${i}-h1_${j}`;
+                    const val = (Math.random() * 2 - 1).toFixed(1);
+                    weights[id] = val;
+                    // Update UI inputs immediately
+                    const input = document.querySelector(`#control-${id} input`);
+                    if(input) input.value = val;
+                    const disp = document.getElementById(`val-${id}`);
+                    if(disp) disp.innerText = val;
+                }
+            }
+            // H1 -> Output
+            for(let i=0; i<config.h1; i++) {
+                const id = `h1_${i}-out`;
+                const val = (Math.random() * 2 - 1).toFixed(1);
+                weights[id] = val;
+                // Update UI
+                const input = document.querySelector(`#control-${id} input`);
+                if(input) input.value = val;
+                const disp = document.getElementById(`val-${id}`);
+                if(disp) disp.innerText = val;
+            }
+        }
+
+        function createLines() {
+            const svg = document.getElementById('connections');
+            svg.innerHTML = '';
+
+            const makeLine = (id) => {
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("id", `line-${id}`);
+                line.setAttribute("stroke-width", "1");
+                line.setAttribute("stroke", "#cbd5e1");
+                svg.appendChild(line);
+            };
+
+            // I -> H1
+            for(let i=0; i<config.inputs; i++) for(let j=0; j<config.h1; j++) makeLine(`i${i}-h1_${j}`);
+            // H1 -> Out
+            for(let i=0; i<config.h1; i++) makeLine(`h1_${i}-out`);
+
+            requestAnimationFrame(drawLines);
+        }
+
+        function drawLines() {
+            const svgRect = document.getElementById('connections').getBoundingClientRect();
+            
+            const position = (lineId, controlId, targetId) => {
+                const control = document.getElementById(controlId);
+                const target = document.getElementById(targetId);
+                const line = document.getElementById(lineId);
+
+                if(control && target && line) {
+                    const r1 = control.getBoundingClientRect();
+                    const r2 = target.getBoundingClientRect();
+
+                    // Start from right side of weight box
+                    const x1 = r1.right - svgRect.left;
+                    const y1 = r1.top + r1.height/2 - svgRect.top;
+
+                    // End at left side of target circle
+                    const x2 = r2.left - svgRect.left;
+                    const y2 = r2.top + r2.height/2 - svgRect.top;
+
+                    line.setAttribute("x1", x1);
+                    line.setAttribute("y1", y1);
+                    line.setAttribute("x2", x2);
+                    line.setAttribute("y2", y2);
+                }
+            };
+
+            // I -> H1
+            for(let i=0; i<config.inputs; i++) 
+                for(let j=0; j<config.h1; j++) 
+                    position(`line-i${i}-h1_${j}`, `control-i${i}-h1_${j}`, `h1-${j}-circle`);
+
+            // H1 -> Out
+            for(let i=0; i<config.h1; i++) 
+                position(`line-h1_${i}-out`, `control-h1_${i}-out`, `out-circle`);
+        }
+
+        // --- UPDATE LOGIC ---
+        function updateWeight(id, val) {
+            weights[id] = parseFloat(val);
+            document.getElementById(`val-${id}`).innerText = weights[id];
+            updateNetwork();
+        }
+
+        function updateNetwork() {
+            // 1. Get Inputs
+            let inputVals = [];
+            for(let i=0; i<config.inputs; i++) {
+                inputVals[i] = document.getElementById(`input${i}`).checked ? 1 : 0;
+            }
+
+            // 2. Calc H1
+            let h1Vals = [];
+            for(let j=0; j<config.h1; j++) {
+                let sum = 0;
+                for(let i=0; i<config.inputs; i++) {
+                    sum += inputVals[i] * weights[`i${i}-h1_${j}`];
+                }
+                const bias = parseFloat(document.getElementById(`bias-h1-${j}`).value);
+                document.getElementById(`disp-bias-h1-${j}`).innerText = bias;
+                sum += bias;
+                
+                h1Vals[j] = sum > 0 ? 1 : 0;
+                
+                const node = document.getElementById(`h1-${j}-circle`);
+                const txt = document.getElementById(`h1-${j}-sum`);
+                txt.innerText = sum.toFixed(1);
+                updateNodeStyle(node, h1Vals[j]);
+                
+                // Style lines I -> H1
+                for(let i=0; i<config.inputs; i++) {
+                    styleLine(`line-i${i}-h1_${j}`, inputVals[i], weights[`i${i}-h1_${j}`]);
+                }
+            }
+
+            // 3. Calc Output
+            let sum = 0;
+            for(let i=0; i<config.h1; i++) {
+                sum += h1Vals[i] * weights[`h1_${i}-out`];
+            }
+            const bias = parseFloat(document.getElementById(`bias-out`).value);
+            document.getElementById(`txt-bias-out`).innerText = bias.toFixed(1);
+            sum += bias;
+
+            const outActive = sum > 0 ? 1 : 0;
+            
+            const outNode = document.getElementById(`out-circle`);
+            const outVal = document.getElementById(`out-val`);
+            outVal.innerText = outActive;
+            outVal.className = outActive ? "text-2xl font-bold text-green-700" : "text-2xl font-bold text-slate-300";
+            updateNodeStyle(outNode, outActive);
+
+            // Style Lines H1 -> Out
+            for(let i=0; i<config.h1; i++) {
+                styleLine(`line-h1_${i}-out`, h1Vals[i], weights[`h1_${i}-out`]);
+            }
+        }
+
+        function updateNodeStyle(el, active) {
+            if(active) {
+                el.classList.remove('inactive-node');
+                el.classList.add('active-node');
+            } else {
+                el.classList.remove('active-node');
+                el.classList.add('inactive-node');
+            }
+        }
+
+        function styleLine(id, inputActive, weight) {
+            const line = document.getElementById(id);
+            const w = parseFloat(weight);
+            const width = Math.max(1, Math.abs(w));
+            
+            let color = "#cbd5e1"; // Inactive Gray
+            let opacity = 0.3;
+
+            if (inputActive) {
+                opacity = 1;
+                if (w > 0) color = "#3b82f6"; // Blue
+                else if (w < 0) color = "#ef4444"; // Red
+                else color = "#e2e8f0";
+            } else {
+                if (w > 0) color = "#93c5fd"; 
+                else if (w < 0) color = "#fca5a5"; 
+            }
+
+            line.setAttribute("stroke", color);
+            line.setAttribute("stroke-width", width);
+            line.setAttribute("opacity", opacity);
+        }
+
+        function randomizeWeights() {
+            Object.keys(weights).forEach(key => {
+                const val = (Math.random() * 4 - 2).toFixed(1);
+                weights[key] = val;
+                
+                // Update slider and display
+                const input = document.querySelector(`#control-${key} input`);
+                if(input) input.value = val;
+                const disp = document.getElementById(`val-${key}`);
+                if(disp) disp.innerText = val;
+            });
+            updateNetwork();
+        }
+
+        function resetNetwork() {
+            Object.keys(weights).forEach(key => {
+                weights[key] = 0;
+                 const input = document.querySelector(`#control-${key} input`);
+                if(input) input.value = 0;
+                const disp = document.getElementById(`val-${key}`);
+                if(disp) disp.innerText = 0;
+            });
+            updateNetwork();
+        }
+
+        window.onload = function() {
+            generateDOM();
+            updateNetwork();
+            window.addEventListener('resize', drawLines);
+        };
+
+    </script>
+</body>
+</html>
