@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The "Weekend Planner" Neuron</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        .neuron-circle {
+            transition: all 0.3s ease;
+        }
+        .connection-line {
+            transition: all 0.1s ease;
+        }
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center min-h-screen p-4">
+
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl font-bold text-slate-800">The "Weekend Planner" Neuron</h1>
+        <p class="text-slate-600 mt-2">Will you go out this weekend? Adjust the weights to decide.</p>
+    </header>
+
+    <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-4xl flex flex-col md:flex-row gap-8 items-center justify-center">
+
+        <!-- INPUTS COLUMN -->
+        <div class="flex flex-col gap-8 w-full md:w-1/3">
+            
+            <!-- Input 1 -->
+            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <label class="block font-bold text-blue-800 mb-1">Input 1: Weather</label>
+                <div class="text-sm text-gray-500 mb-2">(0 = Stormy, 1 = Sunny)</div>
+                <input type="range" id="input1" min="0" max="1" step="1" value="1" class="w-full">
+                <div class="text-right font-mono text-blue-600" id="val-input1">1.0</div>
+                
+                <div class="mt-2 pt-2 border-t border-blue-200">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Weight (Importance)</label>
+                    <input type="range" id="weight1" min="-5" max="5" step="0.1" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="text-right font-mono text-xs text-gray-500" id="val-weight1">2.0</div>
+                </div>
+            </div>
+
+            <!-- Input 2 -->
+            <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                <label class="block font-bold text-green-800 mb-1">Input 2: Friends</label>
+                <div class="text-sm text-gray-500 mb-2">(0 = Busy, 1 = Free)</div>
+                <input type="range" id="input2" min="0" max="1" step="1" value="1" class="w-full">
+                <div class="text-right font-mono text-green-600" id="val-input2">1.0</div>
+
+                <div class="mt-2 pt-2 border-t border-green-200">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Weight (Importance)</label>
+                    <input type="range" id="weight2" min="-5" max="5" step="0.1" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="text-right font-mono text-xs text-gray-500" id="val-weight2">2.0</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- VISUALIZATION / SOMA -->
+        <div class="flex flex-col items-center justify-center w-full md:w-1/3 relative h-64">
+            
+            <!-- SVG Connections -->
+            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 0;">
+                <!-- Line 1 -->
+                <line x1="0" y1="20%" x2="50%" y2="50%" stroke="#cbd5e1" stroke-width="4" id="line1" />
+                <!-- Line 2 -->
+                <line x1="0" y1="80%" x2="50%" y2="50%" stroke="#cbd5e1" stroke-width="4" id="line2" />
+                <!-- Output Line -->
+                <line x1="50%" y1="50%" x2="100%" y2="50%" stroke="#cbd5e1" stroke-width="4" />
+            </svg>
+
+            <!-- The Neuron (Soma) -->
+            <div id="soma" class="neuron-circle z-10 w-32 h-32 rounded-full border-4 flex flex-col items-center justify-center bg-white shadow-xl">
+                <div class="text-xs text-gray-400 font-bold uppercase mb-1">Sum</div>
+                <div id="sum-display" class="text-2xl font-bold font-mono">0.0</div>
+            </div>
+
+            <!-- Bias Control -->
+            <div class="absolute bottom-0 bg-yellow-50 p-2 rounded border border-yellow-200 text-center w-40 transform translate-y-4">
+                <label class="block text-xs font-bold text-yellow-800">Bias (Lazy/Eager)</label>
+                <input type="range" id="bias" min="-5" max="5" step="0.1" value="-2" class="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                <div class="text-xs font-mono text-yellow-600" id="val-bias">-2.0</div>
+            </div>
+
+        </div>
+
+        <!-- OUTPUT COLUMN -->
+        <div class="flex flex-col items-center justify-center w-full md:w-1/3 text-center pl-4 border-l border-gray-100">
+            <h3 class="text-lg font-bold text-gray-500 mb-4">Activation (Output)</h3>
+            
+            <div id="output-box" class="p-6 rounded-xl w-full transition-all duration-300 transform scale-100">
+                <div id="output-icon" class="text-6xl mb-2">🏠</div>
+                <div id="output-text" class="text-2xl font-bold uppercase">Stay Home</div>
+                <div id="output-math" class="text-sm font-mono mt-2 text-gray-500 opacity-0">0</div>
+            </div>
+
+            <div class="mt-6 text-left bg-gray-50 p-3 rounded text-sm text-gray-600 w-full">
+                <p class="font-mono mb-1 text-xs"><strong>Formula:</strong></p>
+                <p>(Wthr * W1) + (Frnds * W2) + Bias</p>
+                <p id="math-breakdown" class="font-mono mt-1 text-blue-600"></p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Explanation Area -->
+    <div class="mt-8 max-w-3xl text-gray-600 text-sm">
+        <h3 class="font-bold text-gray-800 mb-2">How it works (Day 1 & 2 Concepts):</h3>
+        <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Inputs (x):</strong> The raw data (Weather, Friends).</li>
+            <li><strong>Weights (w):</strong> How much that data matters to <em>you</em>. Positive means you like it, negative means you hate it.</li>
+            <li><strong>Bias (b):</strong> Your starting threshold. A negative bias means you need a lot of positive inputs to overcome your laziness.</li>
+            <li><strong>Activation:</strong> If the total sum is greater than 0, the neuron "fires" (Output = 1).</li>
+        </ul>
+    </div>
+
+    <script>
+        // Get Elements
+        const inputs = {
+            i1: document.getElementById('input1'),
+            i2: document.getElementById('input2'),
+            w1: document.getElementById('weight1'),
+            w2: document.getElementById('weight2'),
+            b: document.getElementById('bias')
+        };
+
+        const displays = {
+            i1: document.getElementById('val-input1'),
+            i2: document.getElementById('val-input2'),
+            w1: document.getElementById('val-weight1'),
+            w2: document.getElementById('val-weight2'),
+            b: document.getElementById('val-bias'),
+            sum: document.getElementById('sum-display'),
+            math: document.getElementById('math-breakdown'),
+            outBox: document.getElementById('output-box'),
+            outText: document.getElementById('output-text'),
+            outIcon: document.getElementById('output-icon'),
+            line1: document.getElementById('line1'),
+            line2: document.getElementById('line2'),
+            soma: document.getElementById('soma')
+        };
+
+        function updateNeuron() {
+            // Get Values
+            const i1 = parseFloat(inputs.i1.value);
+            const w1 = parseFloat(inputs.w1.value);
+            const i2 = parseFloat(inputs.i2.value);
+            const w2 = parseFloat(inputs.w2.value);
+            const b = parseFloat(inputs.b.value);
+
+            // Update Text Displays
+            displays.i1.textContent = i1.toFixed(1);
+            displays.w1.textContent = w1.toFixed(1);
+            displays.i2.textContent = i2.toFixed(1);
+            displays.w2.textContent = w2.toFixed(1);
+            displays.b.textContent = b.toFixed(1);
+
+            // Calculate Sum
+            const weightedSum = (i1 * w1) + (i2 * w2) + b;
+            displays.sum.textContent = weightedSum.toFixed(2);
+
+            // Update Math Breakdown
+            displays.math.innerHTML = `(${i1} * ${w1}) + (${i2} * ${w2}) + (${b}) = <strong>${weightedSum.toFixed(2)}</strong>`;
+
+            // Visual Feedback on Lines (Thickness based on weight magnitude, Color on sign)
+            displays.line1.setAttribute('stroke-width', Math.max(1, Math.abs(w1) * 2));
+            displays.line1.setAttribute('stroke', w1 >= 0 ? '#3b82f6' : '#ef4444'); // Blue positive, Red negative
+            
+            displays.line2.setAttribute('stroke-width', Math.max(1, Math.abs(w2) * 2));
+            displays.line2.setAttribute('stroke', w2 >= 0 ? '#22c55e' : '#ef4444');
+
+            // Activation Function (Step Function at 0)
+            if (weightedSum > 0) {
+                // FIRE!
+                displays.outBox.className = "p-6 rounded-xl w-full transition-all duration-300 transform scale-110 bg-green-100 border-2 border-green-400 text-green-800 shadow-lg";
+                displays.outText.textContent = "GO OUT!";
+                displays.outIcon.textContent = "🎉";
+                displays.soma.style.borderColor = "#22c55e";
+                displays.soma.style.backgroundColor = "#dcfce7";
+            } else {
+                // DON'T FIRE
+                displays.outBox.className = "p-6 rounded-xl w-full transition-all duration-300 transform scale-100 bg-gray-100 border-2 border-gray-300 text-gray-500";
+                displays.outText.textContent = "STAY HOME";
+                displays.outIcon.textContent = "🏠";
+                displays.soma.style.borderColor = "#94a3b8";
+                displays.soma.style.backgroundColor = "#ffffff";
+            }
+        }
+
+        // Add Listeners
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', updateNeuron);
+        });
+
+        // Init
+        updateNeuron();
+
+    </script>
+</body>
+</html>
