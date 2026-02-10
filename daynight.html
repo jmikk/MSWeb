@@ -9,64 +9,20 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
-        
-        .interface-layer {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            padding: 15px;
-            gap: 15px;
-        }
-
-        .ui-card {
-            pointer-events: auto;
-            background: rgba(10, 10, 15, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 16px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-        }
-
+        .interface-layer { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
+        .ui-card { pointer-events: auto; background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 16px; border-radius: 20px; }
         .top-panel { width: 100%; max-width: 360px; }
         .bottom-panel { width: 100%; max-width: 360px; margin-top: auto; border-left: 4px solid #3b82f6; }
-
         .control-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.65rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; font-weight: 700; }
-        
-        .season-btn {
-            background: #1f2937;
-            border: 1px solid #374151;
-            padding: 10px 6px;
-            border-radius: 10px;
-            font-size: 0.75rem;
-            transition: all 0.2s;
-            color: #d1d5db;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .season-btn.active { 
-            background: #2563eb; 
-            border-color: #60a5fa; 
-            color: white;
-            box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
-        }
-
+        .season-btn { background: #1f2937; border: 1px solid #374151; padding: 10px 6px; border-radius: 10px; font-size: 0.75rem; transition: all 0.2s; color: #d1d5db; width: 100%; }
+        .season-btn.active { background: #2563eb; border-color: #60a5fa; color: white; }
         .day-bar { height: 12px; border-radius: 6px; background: #111; overflow: hidden; display: flex; margin: 10px 0; border: 1px solid #333; }
-        .day-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .night-fill { background: linear-gradient(90deg, #1e3a8a, #3b82f6); height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-
+        .day-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); height: 100%; transition: width 0.3s; }
+        .night-fill { background: linear-gradient(90deg, #1e3a8a, #3b82f6); height: 100%; transition: width 0.3s; }
         input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; }
         input[type=range]::-webkit-slider-runnable-track { background: #374151; height: 6px; border-radius: 3px; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #60a5fa; margin-top: -6px; cursor: pointer; border: 2px solid white; }
-
-        @media (min-width: 768px) {
-            .interface-layer { padding: 30px; }
-            .top-panel, .bottom-panel { max-width: 340px; }
-        }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #60a5fa; margin-top: -6px; border: 2px solid white; }
     </style>
 </head>
 <body>
@@ -74,7 +30,6 @@
     <div class="interface-layer">
         <div class="ui-card top-panel">
             <h1 class="text-xl font-black mb-3 italic tracking-tighter">SOLAR <span class="text-blue-500">LAB</span></h1>
-            
             <div class="control-group">
                 <label>Set Orbit Position</label>
                 <div class="grid grid-cols-2 gap-2">
@@ -83,9 +38,8 @@
                     <button onclick="setSeason('winter')" id="btn-winter" class="season-btn">Dec Solstice</button>
                     <button onclick="setSeason('spring')" id="btn-spring" class="season-btn">March Equinox</button>
                 </div>
-                <button onclick="setSeason('orbit')" id="btn-orbit" class="season-btn w-full mt-2 active font-bold">▶ RESUME ORBIT</button>
+                <button onclick="setSeason('orbit')" id="btn-orbit" class="season-btn mt-2 active font-bold">▶ RESUME ORBIT</button>
             </div>
-
             <div class="space-y-4">
                 <div class="control-group">
                     <div class="flex justify-between items-center mb-1">
@@ -103,91 +57,73 @@
 
         <div class="ui-card bottom-panel">
             <div class="flex items-center gap-2 mb-2">
-                <div id="statusDot" class="w-3 h-3 rounded-full bg-yellow-400 animate-pulse"></div>
+                <div id="statusDot" class="w-3 h-3 rounded-full bg-yellow-400"></div>
                 <div id="sunStatus" class="text-sm font-bold uppercase tracking-widest text-yellow-400">Daytime</div>
             </div>
             <div class="day-bar">
                 <div id="dayFill" class="day-fill" style="width: 50%"></div>
                 <div id="nightFill" class="night-fill" style="width: 50%"></div>
             </div>
-            <div class="flex justify-between items-center">
-                <span id="ratioText" class="text-xs font-mono text-gray-300">12.0h Day / 12.0h Night</span>
-                <span class="text-[9px] font-bold text-blue-500 uppercase px-2 py-0.5 bg-blue-900/30 rounded">Model Active</span>
-            </div>
+            <div id="ratioText" class="text-xs font-mono text-gray-300">12.0h Day / 12.0h Night</div>
         </div>
     </div>
 
     <script>
-        let scene, camera, renderer, sun, earth, earthGroup, markerDot;
+        let scene, camera, renderer, sun, earth, earthGroup, markerDot, earthContainer;
         let time = 0, rotationSpeed = 0.025, orbitSpeed = 0.004, mode = 'orbit';
-        let isUserInteracting = false, targetRotX = 0.4, targetRotY = 0.6, rotX = 0.4, rotY = 0.6, zoom = 24;
+        let isUserInteracting = false, targetRotX = 0.4, targetRotY = 0.6, rotX = 0.4, rotY = 0.6, zoom = 10;
+        let lx, ly;
 
         const AXIAL_TILT = 23.5 * (Math.PI / 180);
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.15));
-            const sunLight = new THREE.PointLight(0xffffff, 2.8, 600);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+            const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
             scene.add(sunLight);
 
-            sun = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd44 }));
+            sun = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd44 }));
             scene.add(sun);
 
-            earthGroup = new THREE.Group();
+            earthGroup = new THREE.Group(); // Handles orbit
             scene.add(earthGroup);
 
-            const earthContainer = new THREE.Group();
-            earthContainer.position.x = 20;
+            earthContainer = new THREE.Group(); // Handles axial tilt
+            earthContainer.position.x = 25;
             earthContainer.rotation.z = AXIAL_TILT; 
             earthGroup.add(earthContainer);
 
-            // Reverted to a stylized blue ball
             earth = new THREE.Mesh(
                 new THREE.SphereGeometry(1.8, 64, 64),
-                new THREE.MeshPhongMaterial({ 
-                    color: 0x2244ff, 
-                    shininess: 30,
-                    emissive: 0x000033
-                })
+                new THREE.MeshPhongMaterial({ color: 0x2244ff, shininess: 30 })
             );
             earthContainer.add(earth);
 
-            const atmos = new THREE.Mesh(
-                new THREE.SphereGeometry(1.85, 64, 64),
-                new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.15, side: THREE.BackSide })
-            );
-            earth.add(atmos);
-
-            const axisLine = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.02, 0.02, 5, 8),
-                new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
-            );
-            earth.add(axisLine);
-
             markerDot = new THREE.Mesh(
-                new THREE.SphereGeometry(0.12, 16, 16),
+                new THREE.SphereGeometry(0.1, 16, 16),
                 new THREE.MeshBasicMaterial({ color: 0xff3300 })
             );
             earth.add(markerDot);
 
+            const axisLine = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            earth.add(axisLine);
+
             createStars();
             setupInteractions();
-            window.addEventListener('resize', onWindowResize, false);
             animate();
         }
 
         function createStars() {
             const geo = new THREE.BufferGeometry();
             const verts = [];
-            for (let i = 0; i < 4000; i++) verts.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
+            for (let i = 0; i < 2000; i++) verts.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
             geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 })));
+            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 })));
         }
 
         function setupInteractions() {
@@ -199,17 +135,14 @@
             window.addEventListener('mousedown', () => isUserInteracting = true);
             window.addEventListener('mouseup', () => isUserInteracting = false);
             window.addEventListener('mousemove', (e) => { if(isUserInteracting) move(e.movementX, e.movementY); });
-            window.addEventListener('touchstart', (e) => {
-                isUserInteracting = true;
-                this.lx = e.touches[0].pageX; this.ly = e.touches[0].pageY;
-            });
+            window.addEventListener('touchstart', (e) => { isUserInteracting = true; lx = e.touches[0].pageX; ly = e.touches[0].pageY; });
             window.addEventListener('touchmove', (e) => {
                 if(!isUserInteracting) return;
-                move(e.touches[0].pageX - this.lx, e.touches[0].pageY - this.ly);
-                this.lx = e.touches[0].pageX; this.ly = e.touches[0].pageY;
+                move(e.touches[0].pageX - lx, e.touches[0].pageY - ly);
+                lx = e.touches[0].pageX; ly = e.touches[0].pageY;
             });
             window.addEventListener('touchend', () => isUserInteracting = false);
-            window.addEventListener('wheel', (e) => { zoom = Math.max(10, Math.min(80, zoom + e.deltaY * 0.02)); });
+            window.addEventListener('wheel', (e) => { zoom = Math.max(5, Math.min(50, zoom + e.deltaY * 0.02)); });
         }
 
         function setSeason(s) {
@@ -222,16 +155,24 @@
             if (s === 'spring') earthGroup.rotation.y = 3*Math.PI/2;
         }
 
-        function updateUI() {
+        function updateLogic() {
             const lat = parseFloat(document.getElementById('latRange').value);
             markerDot.position.y = lat * 1.8; 
             const r = Math.sqrt(Math.max(0, 1.8*1.8 - markerDot.position.y*markerDot.position.y));
-            markerDot.position.z = r; markerDot.position.x = 0;
+            markerDot.position.z = r; 
+            markerDot.position.x = 0;
             document.getElementById('latVal').innerText = `${Math.abs(Math.round(lat*60))}°${lat >= 0 ? 'N' : 'S'}`;
 
-            const worldPos = new THREE.Vector3();
-            markerDot.getWorldPosition(worldPos);
-            const dot = worldPos.clone().normalize().dot(new THREE.Vector3(0,0,0).sub(worldPos).normalize());
+            // Correct Day/Night math
+            const markerWorldPos = new THREE.Vector3();
+            markerDot.getWorldPosition(markerWorldPos);
+            const earthWorldPos = new THREE.Vector3();
+            earth.getWorldPosition(earthWorldPos);
+
+            const markerRelToEarth = markerWorldPos.clone().sub(earthWorldPos).normalize();
+            const sunDirFromEarth = new THREE.Vector3(0,0,0).sub(earthWorldPos).normalize();
+            const dot = markerRelToEarth.dot(sunDirFromEarth);
+
             const sunStatus = document.getElementById('sunStatus');
             const statusDot = document.getElementById('statusDot');
             if (dot > 0) {
@@ -242,6 +183,7 @@
                 statusDot.className = "w-3 h-3 rounded-full bg-blue-600";
             }
 
+            // Stylized Daylight Ratio
             const tiltEff = Math.cos(earthGroup.rotation.y) * lat * 0.82;
             const dayP = Math.min(100, Math.max(0, 50 + (tiltEff * 45)));
             document.getElementById('dayFill').style.width = dayP + "%";
@@ -250,21 +192,26 @@
             rotationSpeed = 0.01 * document.getElementById('speedRange').value;
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
         function animate() {
             requestAnimationFrame(animate);
             if (mode === 'orbit') earthGroup.rotation.y += orbitSpeed;
             earth.rotation.y += rotationSpeed;
+
             rotX += (targetRotX - rotX) * 0.1;
             rotY += (targetRotY - rotY) * 0.1;
-            camera.position.set(zoom*Math.sin(rotY)*Math.cos(rotX), zoom*Math.sin(rotX), zoom*Math.cos(rotY)*Math.cos(rotX));
-            camera.lookAt(0, 0, 0);
-            updateUI();
+
+            // Camera follows Earth
+            const earthPos = new THREE.Vector3();
+            earth.getWorldPosition(earthPos);
+            
+            camera.position.set(
+                earthPos.x + zoom * Math.sin(rotY) * Math.cos(rotX),
+                earthPos.y + zoom * Math.sin(rotX),
+                earthPos.z + zoom * Math.cos(rotY) * Math.cos(rotX)
+            );
+            camera.lookAt(earthPos);
+
+            updateLogic();
             renderer.render(scene, camera);
         }
 
