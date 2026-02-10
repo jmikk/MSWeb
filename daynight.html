@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Realistic Seasons Simulator</title>
+    <title>Solar Lab: External View</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -49,7 +49,7 @@
                     <input type="range" id="latRange" min="-1.4" max="1.4" step="0.05" value="0.7">
                 </div>
                 <div class="control-group">
-                    <label>Earth Rotation Speed</label>
+                    <label>Rotation Speed</label>
                     <input type="range" id="speedRange" min="0" max="10" step="0.5" value="2.5">
                 </div>
             </div>
@@ -70,47 +70,65 @@
 
     <script>
         let scene, camera, renderer, sun, earth, earthGroup, markerDot, earthContainer;
-        let time = 0, rotationSpeed = 0.025, orbitSpeed = 0.004, mode = 'orbit';
-        let isUserInteracting = false, targetRotX = 0.4, targetRotY = 0.6, rotX = 0.4, rotY = 0.6, zoom = 10;
+        let rotationSpeed = 0.025, orbitSpeed = 0.004, mode = 'orbit';
+        let isUserInteracting = false, targetRotX = 0.5, targetRotY = 0.5, rotX = 0.5, rotY = 0.5, zoom = 60;
         let lx, ly;
 
         const AXIAL_TILT = 23.5 * (Math.PI / 180);
+        const ORBIT_RADIUS = 30;
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
+            // Light from the sun
             scene.add(new THREE.AmbientLight(0xffffff, 0.2));
-            const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
+            const sunLight = new THREE.PointLight(0xffffff, 3, 500);
             scene.add(sunLight);
 
-            sun = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd44 }));
+            // The Sun
+            sun = new THREE.Mesh(
+                new THREE.SphereGeometry(4, 32, 32), 
+                new THREE.MeshBasicMaterial({ color: 0xffcc33 })
+            );
             scene.add(sun);
 
-            earthGroup = new THREE.Group(); // Handles orbit
+            // Orbit Path Ring
+            const pathGeo = new THREE.RingGeometry(ORBIT_RADIUS - 0.1, ORBIT_RADIUS + 0.1, 128);
+            const pathMat = new THREE.MeshBasicMaterial({ color: 0x444444, side: THREE.DoubleSide });
+            const pathRing = new THREE.Mesh(pathGeo, pathMat);
+            pathRing.rotation.x = Math.PI / 2;
+            scene.add(pathRing);
+
+            // Orbit Group
+            earthGroup = new THREE.Group();
             scene.add(earthGroup);
 
-            earthContainer = new THREE.Group(); // Handles axial tilt
-            earthContainer.position.x = 25;
+            // Earth Container (for tilt)
+            earthContainer = new THREE.Group();
+            earthContainer.position.x = ORBIT_RADIUS;
             earthContainer.rotation.z = AXIAL_TILT; 
             earthGroup.add(earthContainer);
 
+            // The Earth
             earth = new THREE.Mesh(
-                new THREE.SphereGeometry(1.8, 64, 64),
-                new THREE.MeshPhongMaterial({ color: 0x2244ff, shininess: 30 })
+                new THREE.SphereGeometry(2, 64, 64),
+                new THREE.MeshPhongMaterial({ color: 0x2266ff, shininess: 20 })
             );
             earthContainer.add(earth);
 
+            // Marker
             markerDot = new THREE.Mesh(
-                new THREE.SphereGeometry(0.1, 16, 16),
-                new THREE.MeshBasicMaterial({ color: 0xff3300 })
+                new THREE.SphereGeometry(0.15, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 })
             );
             earth.add(markerDot);
 
-            const axisLine = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            // Poles
+            const axisLine = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
             earth.add(axisLine);
 
             createStars();
@@ -121,16 +139,16 @@
         function createStars() {
             const geo = new THREE.BufferGeometry();
             const verts = [];
-            for (let i = 0; i < 2000; i++) verts.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
+            for (let i = 0; i < 3000; i++) verts.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
             geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 })));
+            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x888888, size: 0.5 })));
         }
 
         function setupInteractions() {
             const move = (dx, dy) => {
                 targetRotY += dx * 0.005;
                 targetRotX += dy * 0.005;
-                targetRotX = Math.max(-1.4, Math.min(1.4, targetRotX));
+                targetRotX = Math.max(0.1, Math.min(1.5, targetRotX)); // Prevent flipping over poles
             };
             window.addEventListener('mousedown', () => isUserInteracting = true);
             window.addEventListener('mouseup', () => isUserInteracting = false);
@@ -142,7 +160,7 @@
                 lx = e.touches[0].pageX; ly = e.touches[0].pageY;
             });
             window.addEventListener('touchend', () => isUserInteracting = false);
-            window.addEventListener('wheel', (e) => { zoom = Math.max(5, Math.min(50, zoom + e.deltaY * 0.02)); });
+            window.addEventListener('wheel', (e) => { zoom = Math.max(20, Math.min(150, zoom + e.deltaY * 0.05)); });
         }
 
         function setSeason(s) {
@@ -157,21 +175,20 @@
 
         function updateLogic() {
             const lat = parseFloat(document.getElementById('latRange').value);
-            markerDot.position.y = lat * 1.8; 
-            const r = Math.sqrt(Math.max(0, 1.8*1.8 - markerDot.position.y*markerDot.position.y));
-            markerDot.position.z = r; 
-            markerDot.position.x = 0;
+            markerDot.position.y = lat * 2.0; 
+            const r = Math.sqrt(Math.max(0, 2.0*2.0 - markerDot.position.y*markerDot.position.y));
+            markerDot.position.z = r; markerDot.position.x = 0;
             document.getElementById('latVal').innerText = `${Math.abs(Math.round(lat*60))}°${lat >= 0 ? 'N' : 'S'}`;
 
-            // Correct Day/Night math
-            const markerWorldPos = new THREE.Vector3();
-            markerDot.getWorldPosition(markerWorldPos);
-            const earthWorldPos = new THREE.Vector3();
-            earth.getWorldPosition(earthWorldPos);
+            // Calculate Day/Night relative to Sun
+            const markerPos = new THREE.Vector3();
+            markerDot.getWorldPosition(markerPos);
+            const earthPos = new THREE.Vector3();
+            earth.getWorldPosition(earthPos);
 
-            const markerRelToEarth = markerWorldPos.clone().sub(earthWorldPos).normalize();
-            const sunDirFromEarth = new THREE.Vector3(0,0,0).sub(earthWorldPos).normalize();
-            const dot = markerRelToEarth.dot(sunDirFromEarth);
+            const toMarker = markerPos.clone().sub(earthPos).normalize();
+            const toSun = new THREE.Vector3(0,0,0).sub(earthPos).normalize();
+            const dot = toMarker.dot(toSun);
 
             const sunStatus = document.getElementById('sunStatus');
             const statusDot = document.getElementById('statusDot');
@@ -183,7 +200,6 @@
                 statusDot.className = "w-3 h-3 rounded-full bg-blue-600";
             }
 
-            // Stylized Daylight Ratio
             const tiltEff = Math.cos(earthGroup.rotation.y) * lat * 0.82;
             const dayP = Math.min(100, Math.max(0, 50 + (tiltEff * 45)));
             document.getElementById('dayFill').style.width = dayP + "%";
@@ -200,20 +216,23 @@
             rotX += (targetRotX - rotX) * 0.1;
             rotY += (targetRotY - rotY) * 0.1;
 
-            // Camera follows Earth
-            const earthPos = new THREE.Vector3();
-            earth.getWorldPosition(earthPos);
-            
+            // Camera is now fixed to Sun (0,0,0)
             camera.position.set(
-                earthPos.x + zoom * Math.sin(rotY) * Math.cos(rotX),
-                earthPos.y + zoom * Math.sin(rotX),
-                earthPos.z + zoom * Math.cos(rotY) * Math.cos(rotX)
+                zoom * Math.sin(rotY) * Math.cos(rotX),
+                zoom * Math.sin(rotX),
+                zoom * Math.cos(rotY) * Math.cos(rotX)
             );
-            camera.lookAt(earthPos);
+            camera.lookAt(0, 0, 0);
 
             updateLogic();
             renderer.render(scene, camera);
         }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
         window.onload = init;
     </script>
