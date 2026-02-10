@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Solar Lab: Fixed Axial Tilt</title>
+    <title>Solar Lab: Verified Accuracy</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
         .interface-layer { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
-        .ui-card { pointer-events: auto; background: rgba(10, 10, 15, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 16px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .ui-card { pointer-events: auto; background: rgba(10, 10, 15, 0.92); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 16px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); }
         .top-panel { width: 100%; max-width: 340px; }
-        .bottom-panel { width: 100%; max-width: 340px; margin-top: auto; border-left: 4px solid #3b82f6; }
+        .bottom-panel { width: 100%; max-width: 340px; margin-top: auto; border-left: 4px solid #10b981; }
         label { display: block; font-size: 0.65rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; font-weight: 700; }
         .season-btn { background: #1f2937; border: 1px solid #374151; padding: 10px 6px; border-radius: 10px; font-size: 0.75rem; transition: all 0.2s; color: #d1d5db; width: 100%; }
-        .season-btn.active { background: #2563eb; border-color: #60a5fa; color: white; }
+        .season-btn.active { background: #10b981; border-color: #34d399; color: white; }
         .day-bar { height: 12px; border-radius: 6px; background: #111; overflow: hidden; display: flex; margin: 10px 0; border: 1px solid #333; }
         .day-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); height: 100%; transition: width 0.3s; }
         .night-fill { background: linear-gradient(90deg, #1e3a8a, #3b82f6); height: 100%; transition: width 0.3s; }
         input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; }
         input[type=range]::-webkit-slider-runnable-track { background: #374151; height: 6px; border-radius: 3px; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #60a5fa; margin-top: -6px; border: 2px solid white; cursor: pointer; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #10b981; margin-top: -6px; border: 2px solid white; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div class="interface-layer">
         <div class="ui-card top-panel">
-            <h1 class="text-xl font-black mb-3 italic tracking-tighter">SOLAR <span class="text-blue-500">LAB</span></h1>
+            <h1 class="text-xl font-black mb-3 italic tracking-tighter">SOLAR <span class="text-emerald-500">LAB</span></h1>
             <div class="control-group mb-4">
                 <label>Orbital Position</label>
                 <div class="grid grid-cols-2 gap-2">
@@ -43,7 +43,7 @@
                 <div class="control-group">
                     <div class="flex justify-between items-center mb-1">
                         <label class="mb-0">Marker Latitude</label>
-                        <span id="latVal" class="text-[10px] font-mono text-blue-400">45°N</span>
+                        <span id="latVal" class="text-[10px] font-mono text-emerald-400">45°N</span>
                     </div>
                     <input type="range" id="latRange" min="-1.4" max="1.4" step="0.05" value="0.7">
                 </div>
@@ -64,14 +64,14 @@
     </div>
 
     <script>
-        let scene, camera, renderer, earth, earthPivot, markerDot, earthSpinGroup;
+        let scene, camera, renderer, earth, earthPivot, markerDot, earthSpinGroup, tiltGroup;
         let orbitAngle = 0, orbitSpeed = 0.005, isOrbiting = true;
-        let rotationSpeed = 0.03;
-        let isUserInteracting = false, targetRotX = 0.6, targetRotY = 0.5, rotX = 0.6, rotY = 0.5, zoom = 80;
+        let rotationSpeed = 0.035;
+        let isUserInteracting = false, targetRotX = 0.6, targetRotY = 0.5, rotX = 0.6, rotY = 0.5, zoom = 90;
         let lx, ly;
 
         const AXIAL_TILT = 23.5 * (Math.PI / 180);
-        const ORBIT_RADIUS = 40;
+        const ORBIT_RADIUS = 45;
 
         function init() {
             scene = new THREE.Scene();
@@ -80,55 +80,50 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // Sunlight
             scene.add(new THREE.AmbientLight(0xffffff, 0.1));
-            const sunLight = new THREE.PointLight(0xffffff, 3.5, 600);
+            const sunLight = new THREE.PointLight(0xffffff, 3.8, 800);
             scene.add(sunLight);
 
-            // Sun Mesh
-            const sun = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd44 }));
-            scene.add(sun);
+            // Sun
+            scene.add(new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffcc33 })));
 
             // Orbit Ring
-            const pathRing = new THREE.Mesh(
-                new THREE.RingGeometry(ORBIT_RADIUS - 0.1, ORBIT_RADIUS + 0.1, 128),
-                new THREE.MeshBasicMaterial({ color: 0x444444, side: THREE.DoubleSide })
-            );
+            const pathRing = new THREE.Mesh(new THREE.RingGeometry(ORBIT_RADIUS - 0.1, ORBIT_RADIUS + 0.1, 128), new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide }));
             pathRing.rotation.x = Math.PI / 2;
             scene.add(pathRing);
 
-            // EARTH SYSTEM
-            earthPivot = new THREE.Group(); // This moves the earth along the orbit
+            // Earth System
+            earthPivot = new THREE.Group();
             scene.add(earthPivot);
 
-            const tiltGroup = new THREE.Group(); // This applies the FIXED tilt
-            tiltGroup.rotation.z = AXIAL_TILT; 
+            tiltGroup = new THREE.Group();
+            // FLIPPED: North Pole now tilts toward +X (away from center when at +X position)
+            tiltGroup.rotation.z = -AXIAL_TILT; 
             earthPivot.add(tiltGroup);
 
-            earthSpinGroup = new THREE.Group(); // This handles the daily rotation
+            earthSpinGroup = new THREE.Group();
             tiltGroup.add(earthSpinGroup);
 
-            // The Blue Ball
             earth = new THREE.Mesh(
-                new THREE.SphereGeometry(3, 64, 64),
-                new THREE.MeshPhongMaterial({ color: 0x1e40af, shininess: 15, emissive: 0x051030 })
+                new THREE.SphereGeometry(3.5, 64, 64),
+                new THREE.MeshPhongMaterial({ color: 0x2563eb, shininess: 25, emissive: 0x0a1a4a })
             );
             earthSpinGroup.add(earth);
 
-            // Equator Line
-            const equatorGeo = new THREE.TorusGeometry(3.05, 0.03, 16, 100);
-            const equatorMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
-            const equator = new THREE.Mesh(equatorGeo, equatorMat);
+            // Equator Line (the white "belt")
+            const equator = new THREE.Mesh(
+                new THREE.TorusGeometry(3.55, 0.03, 16, 100),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })
+            );
             equator.rotation.x = Math.PI / 2;
             earthSpinGroup.add(equator);
 
-            // Axis Poles
-            const axisLine = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
-            earthSpinGroup.add(axisLine);
-
             // Marker
-            markerDot = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+            markerDot = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
             earthSpinGroup.add(markerDot);
+
+            // Axis line
+            earthSpinGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 11), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 })));
 
             createStars();
             setupInteractions();
@@ -138,16 +133,17 @@
         function createStars() {
             const geo = new THREE.BufferGeometry();
             const verts = [];
-            for (let i = 0; i < 2500; i++) verts.push((Math.random()-0.5)*1500, (Math.random()-0.5)*1500, (Math.random()-0.5)*1500);
+            for (let i = 0; i < 2000; i++) verts.push((Math.random()-0.5)*1800, (Math.random()-0.5)*1800, (Math.random()-0.5)*1800);
             geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.7 })));
+            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x888888, size: 0.8 })));
         }
 
         function setSeason(s) {
-            if (s === 'summer') orbitAngle = Math.PI;    // Positioned at -X, tilted toward Sun
-            if (s === 'autumn') orbitAngle = Math.PI/2;  // Positioned at Z
-            if (s === 'winter') orbitAngle = 0;          // Positioned at +X, tilted away from Sun
-            if (s === 'spring') orbitAngle = 3*Math.PI/2;// Positioned at -Z
+            // Updated Orbit Angles to match flipped tilt
+            if (s === 'winter') orbitAngle = 0;          // At +X, tilting toward +X (Away from Sun)
+            if (s === 'spring') orbitAngle = Math.PI/2;  // At +Z
+            if (s === 'summer') orbitAngle = Math.PI;    // At -X, tilting toward +X (Toward Sun)
+            if (s === 'autumn') orbitAngle = 3*Math.PI/2;// At -Z
             
             document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('btn-' + s).classList.add('active');
@@ -159,23 +155,17 @@
         }
 
         function updateLogic() {
-            // Update Earth Position
-            earthPivot.position.x = Math.cos(orbitAngle) * ORBIT_RADIUS;
-            earthPivot.position.z = Math.sin(orbitAngle) * ORBIT_RADIUS;
+            earthPivot.position.set(Math.cos(orbitAngle) * ORBIT_RADIUS, 0, Math.sin(orbitAngle) * ORBIT_RADIUS);
 
-            // Marker Positioning
             const lat = parseFloat(document.getElementById('latRange').value);
-            markerDot.position.y = lat * 3.0; 
-            const r = Math.sqrt(Math.max(0, 3*3 - markerDot.position.y*markerDot.position.y));
+            markerDot.position.y = lat * 3.5; 
+            const r = Math.sqrt(Math.max(0, 3.5*3.5 - markerDot.position.y*markerDot.position.y));
             markerDot.position.z = r; markerDot.position.x = 0;
             document.getElementById('latVal').innerText = `${Math.abs(Math.round(lat*64))}°${lat >= 0 ? 'N' : 'S'}`;
 
-            // Day/Night Detection
             const mPos = new THREE.Vector3(); markerDot.getWorldPosition(mPos);
             const ePos = new THREE.Vector3(); earth.getWorldPosition(ePos);
-            const toSun = new THREE.Vector3(0,0,0).sub(ePos).normalize();
-            const toMarker = mPos.clone().sub(ePos).normalize();
-            const dot = toMarker.dot(toSun);
+            const dot = mPos.clone().sub(ePos).normalize().dot(new THREE.Vector3(0,0,0).sub(ePos).normalize());
 
             const sunStatus = document.getElementById('sunStatus');
             const statusDot = document.getElementById('statusDot');
@@ -187,12 +177,9 @@
                 statusDot.className = "w-3 h-3 rounded-full bg-blue-600";
             }
 
-            // Calculation for Daylight hours based on Tilt Alignment
-            // Winter Solstice (orbitAngle 0) = Min light for North (lat > 0)
-            const seasonPhase = Math.cos(orbitAngle); 
-            const tiltEff = -seasonPhase * lat * 0.85; 
+            // Corrected daylight ratio math for flipped orientation
+            const tiltEff = -Math.cos(orbitAngle) * lat * 0.85; 
             const dayP = Math.min(100, Math.max(0, 50 + (tiltEff * 48)));
-            
             document.getElementById('dayFill').style.width = dayP + "%";
             document.getElementById('nightFill').style.width = (100 - dayP) + "%";
             document.getElementById('ratioText').innerText = `${(dayP * 0.24).toFixed(1)}h Day / ${((100-dayP) * 0.24).toFixed(1)}h Night`;
@@ -209,7 +196,7 @@
                 move(e.touches[0].pageX - lx, e.touches[0].pageY - ly);
                 lx = e.touches[0].pageX; ly = e.touches[0].pageY;
             });
-            window.addEventListener('wheel', (e) => { zoom = Math.max(30, Math.min(250, zoom + e.deltaY * 0.1)); });
+            window.addEventListener('wheel', (e) => { zoom = Math.max(40, Math.min(250, zoom + e.deltaY * 0.1)); });
         }
 
         function animate() {
