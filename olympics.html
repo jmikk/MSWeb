@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Olympics 2026 | Leaderboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --olympic-gold: #D4AF37;
+            --olympic-silver: #C0C0C0;
+            --olympic-bronze: #CD7F32;
+            --olympic-blue: #0081C8;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        h1, h2, .olympic-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+        }
+
+        .gold-border { border-left: 4px solid var(--olympic-gold); }
+        .silver-border { border-left: 4px solid var(--olympic-silver); }
+        .bronze-border { border-left: 4px solid var(--olympic-bronze); }
+
+        .medal-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 0.8rem;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+
+        .bg-gold { background: linear-gradient(135deg, #fceabb 0%, #fccd4d 50%, #f8b500 51%, #fbdf93 100%); color: #4e342e; }
+        .bg-silver { background: linear-gradient(135deg, #f5f7fa 0%, #b8c6db 100%); color: #37474f; }
+        .bg-bronze { background: linear-gradient(135deg, #e65245 0%, #b25d4e 100%); color: #fff; }
+
+        .tab-btn {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active {
+            color: var(--olympic-gold);
+            border-bottom: 2px solid var(--olympic-gold);
+            background: rgba(212, 175, 55, 0.1);
+        }
+
+        .loading-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Header Section -->
+    <header class="text-center mb-12">
+        <div class="flex justify-center mb-4">
+            <svg width="120" height="60" viewBox="0 0 120 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="20" cy="20" r="18" stroke="#0081C8" stroke-width="4"/>
+                <circle cx="60" cy="20" r="18" stroke="#000000" stroke-width="4"/>
+                <circle cx="100" cy="20" r="18" stroke="#EE334E" stroke-width="4"/>
+                <circle cx="40" cy="40" r="18" stroke="#FCB131" stroke-width="4"/>
+                <circle cx="80" cy="40" r="18" stroke="#00A651" stroke-width="4"/>
+            </svg>
+        </div>
+        <h1 class="text-4xl md:text-6xl font-bold tracking-widest text-white uppercase mb-2">Office Olympics</h1>
+        <p class="text-gray-400 tracking-widest">EST. 2026 | The West40 games!</p>
+        <div id="syncStatus" class="mt-4 text-[10px] text-gray-500 flex items-center justify-center gap-2">
+            <span class="loading-ring"></span> SYNCING WITH GOOGLE SHEETS...
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left Column: Medal Tally -->
+        <section class="lg:col-span-1 space-y-6">
+            <div class="glass-panel p-6">
+                <h2 class="text-xl mb-4 font-bold text-gold flex items-center gap-2">
+                    <span style="color:var(--olympic-gold)">🥇</span> Medal Tally
+                </h2>
+                <div id="medalTally" class="space-y-3">
+                    <!-- Medals populated by JS -->
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Leaderboards -->
+        <section class="lg:col-span-2 space-y-6">
+            <div class="glass-panel p-2 flex overflow-x-auto whitespace-nowrap gap-2 no-scrollbar">
+                <button onclick="changeView('chair_race')" id="tab-chair_race" class="tab-btn px-6 py-3 rounded-xl font-semibold active">Chair Race</button>
+                <button onclick="changeView('archery')" id="tab-archery" class="tab-btn px-6 py-3 rounded-xl font-semibold">Archery</button>
+                <button onclick="changeView('cup_toss')" id="tab-cup_toss" class="tab-btn px-6 py-3 rounded-xl font-semibold">Cup Toss</button>
+                <button onclick="changeView('bottle_flip')" id="tab-bottle_flip" class="tab-btn px-6 py-3 rounded-xl font-semibold">Bottle Flip</button>
+            </div>
+
+            <div class="glass-panel overflow-hidden">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                    <div>
+                        <h2 id="currentEventTitle" class="text-2xl font-bold">Swivel Chair Race</h2>
+                        <p id="currentEventRule" class="text-xs text-gray-400 uppercase tracking-tighter">Ranking: Lowest Time Wins</p>
+                    </div>
+                    <div class="text-right">
+                        <span id="entryCount" class="text-xs font-bold bg-white/10 px-3 py-1 rounded-full">0 ENTRIES</span>
+                    </div>
+                </div>
+                
+                <div class="min-h-[400px]">
+                    <table class="w-full text-left">
+                        <thead class="bg-black/20 text-xs text-gray-400 uppercase">
+                            <tr>
+                                <th class="p-4">Rank</th>
+                                <th class="p-4">Athlete</th>
+                                <th class="p-4 text-right">Performance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            <!-- Rows via JS -->
+                        </tbody>
+                    </table>
+                    <div id="emptyState" class="hidden flex flex-col items-center justify-center p-20 text-gray-500">
+                        <span class="text-4xl mb-2">🏟️</span>
+                        <p id="emptyStateText">Waiting for data from Google Sheets...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        /**
+         * SETUP: 
+         * Using the URL you provided. We wrap it in a CORS proxy to prevent the 307 redirect error.
+         */
+        const BASE_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTBbuIu9N3fRY1pL-f0b8bVu2l9kWUk06ybnJsMTizuirmz0NIv5sxqQyX6RO7Ye8ZrLboFzDqwBHvB/pub?gid=0&single=true&output=csv';
+        const CORS_PROXY = 'https://corsproxy.io/?';
+
+        const EVENT_RULES = {
+            chair_race: { title: "Swivel Chair Race", better: "lower", unit: "Seconds", sheetName: "Swivel chair race" },
+            archery: { title: "Rubber Band Archery", better: "higher", unit: "Points", sheetName: "Rubber band archery" },
+            cup_toss: { title: "Paper Clip Cup Toss", better: "lower", unit: "Tries", sheetName: "Paper clip cup toss" },
+            bottle_flip: { title: "Bottle Flip", better: "lower", unit: "Tries", sheetName: "Bottle Flip" }
+        };
+
+        let currentView = 'chair_race';
+        let entries = [];
+
+        async function fetchSheetData() {
+            try {
+                document.getElementById('syncStatus').innerHTML = '<span class="loading-ring"></span> SYNCING...';
+                
+                const cacheBuster = `&t=${new Date().getTime()}`;
+                const fullUrl = CORS_PROXY + encodeURIComponent(BASE_CSV_URL + cacheBuster);
+                
+                const response = await fetch(fullUrl);
+                
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const data = await response.text();
+                
+                const rows = data.split(/\r?\n/).slice(1); 
+                entries = rows.map(row => {
+                    const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    if (columns.length < 3) return null;
+                    
+                    const name = columns[0].replace(/"/g, '').trim();
+                    const event = columns[1].replace(/"/g, '').trim();
+                    const value = parseFloat(columns[2].replace(/"/g, '').trim());
+
+                    if (!name || isNaN(value)) return null;
+
+                    return {
+                        name,
+                        event,
+                        value,
+                        timestamp: new Date().toISOString()
+                    };
+                }).filter(e => e !== null);
+
+                refreshUI();
+                document.getElementById('syncStatus').innerHTML = '● LIVE SYNC ACTIVE';
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                document.getElementById('syncStatus').innerHTML = '<span class="text-red-500">● SYNC ERROR</span>';
+                document.getElementById('emptyStateText').innerText = "CORS Error or Invalid URL. Check console for details.";
+                document.getElementById('emptyState').classList.remove('hidden');
+            }
+        }
+
+        function changeView(eventKey) {
+            currentView = eventKey;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${eventKey}`).classList.add('active');
+
+            const rule = EVENT_RULES[eventKey];
+            document.getElementById('currentEventTitle').innerText = rule.title;
+            document.getElementById('currentEventRule').innerText = `Ranking: ${rule.better === 'lower' ? 'Lowest' : 'Highest'} ${rule.unit} Wins`;
+
+            refreshUI();
+        }
+
+        function refreshUI() {
+            const rule = EVENT_RULES[currentView];
+            
+            // Filter strictly by Column B matching the specific sheetName for this event
+            const filtered = entries.filter(e => 
+                e.event.toLowerCase() === rule.sheetName.toLowerCase()
+            );
+
+            filtered.sort((a, b) => {
+                return rule.better === 'lower' ? a.value - b.value : b.value - a.value;
+            });
+
+            const tbody = document.getElementById('leaderboardBody');
+            const emptyState = document.getElementById('emptyState');
+            const entryCount = document.getElementById('entryCount');
+            
+            entryCount.innerText = `${filtered.length} ENTRIES`;
+            tbody.innerHTML = '';
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                filtered.forEach((entry, index) => {
+                    const rank = index + 1;
+                    let rowClass = "";
+                    let medalHtml = rank;
+
+                    if (rank === 1) { rowClass = "gold-border bg-white/5"; medalHtml = '<div class="medal-badge bg-gold">1</div>'; }
+                    else if (rank === 2) { rowClass = "silver-border bg-white/5"; medalHtml = '<div class="medal-badge bg-silver">2</div>'; }
+                    else if (rank === 3) { rowClass = "bronze-border bg-white/5"; medalHtml = '<div class="medal-badge bg-bronze">3</div>'; }
+
+                    tbody.innerHTML += `
+                        <tr class="${rowClass} transition-all border-b border-white/5">
+                            <td class="p-4 font-bold">${medalHtml}</td>
+                            <td class="p-4"><div class="font-semibold">${entry.name}</div></td>
+                            <td class="p-4 text-right font-mono text-xl ${rank <= 3 ? 'text-yellow-500' : ''}">
+                                ${entry.value} <span class="text-xs opacity-50 font-sans">${rule.unit}</span>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            calculateOverallMedals();
+        }
+
+        function calculateOverallMedals() {
+            const tally = {};
+            
+            Object.keys(EVENT_RULES).forEach(eventKey => {
+                const rule = EVENT_RULES[eventKey];
+                
+                // Filter strictly by the event name in Column B
+                const eventEntries = entries.filter(e => 
+                    e.event.toLowerCase() === rule.sheetName.toLowerCase()
+                ).sort((a, b) => rule.better === 'lower' ? a.value - b.value : b.value - a.value);
+
+                // Top 3 in each event get medals for the tally
+                eventEntries.slice(0, 3).forEach((entry, idx) => {
+                    if (!tally[entry.name]) tally[entry.name] = { g: 0, s: 0, b: 0 };
+                    if (idx === 0) tally[entry.name].g++;
+                    if (idx === 1) tally[entry.name].s++;
+                    if (idx === 2) tally[entry.name].b++;
+                });
+            });
+
+            const sortedTally = Object.entries(tally).sort((a, b) => {
+                if (b[1].g !== a[1].g) return b[1].g - a[1].g;
+                if (b[1].s !== a[1].s) return b[1].s - a[1].s;
+                return b[1].b - a[1].b;
+            });
+
+            const container = document.getElementById('medalTally');
+            container.innerHTML = '';
+
+            if (sortedTally.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No medals awarded yet.</p>';
+                return;
+            }
+
+            sortedTally.slice(0, 5).forEach(([name, counts]) => {
+                container.innerHTML += `
+                    <div class="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10">
+                        <span class="font-bold text-sm">${name}</span>
+                        <div class="flex gap-2">
+                            <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-gold"></i> ${counts.g}</span>
+                            <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-silver"></i> ${counts.s}</span>
+                            <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-bronze"></i> ${counts.b}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Auto-fetch data every 30 seconds
+        setInterval(fetchSheetData, 10000);
+        fetchSheetData();
+    </script>
+</body>
+</html>
