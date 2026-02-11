@@ -11,10 +11,14 @@
         
         /* Custom Animations */
         @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); }
-            50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.8); }
+            0%, 100% { box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); border-color: rgba(99, 102, 241, 0.8); }
+            50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.8); border-color: #fff; }
         }
         
+        .unlock-animation {
+            animation: pulse-glow 2s infinite;
+        }
+
         .neuron {
             transition: all 0.3s ease;
         }
@@ -24,7 +28,7 @@
         }
 
         .fade-in {
-            animation: fadeIn 0.5s ease-in;
+            animation: fadeIn 0.5s ease-in forwards;
         }
 
         @keyframes fadeIn {
@@ -83,6 +87,14 @@
             <div class="text-center mb-6">
                 <h2 class="text-xl font-semibold text-white mb-2">Do you like this color?</h2>
                 <p class="text-sm text-slate-400">Teach the AI your preference. It will try to guess correctly over time.</p>
+            </div>
+
+            <!-- Smart Mode Toggle (Hidden initially, unlocks at 5 samples) -->
+            <div id="smart-mode-container" class="mb-6 flex items-center justify-center gap-3 bg-slate-900/50 p-3 rounded-lg border border-slate-700 w-full max-w-xs transition-all duration-1000 opacity-0 pointer-events-none transform translate-y-4">
+                <input type="checkbox" id="smart-mode" class="w-5 h-5 text-indigo-600 bg-slate-700 border-slate-500 rounded focus:ring-indigo-500 cursor-pointer">
+                <label for="smart-mode" class="text-sm text-indigo-200 select-none cursor-pointer font-medium">
+                    ✨ Show me colors I'll like
+                </label>
             </div>
 
             <!-- Controls -->
@@ -444,17 +456,40 @@
         // --- GAME LOGIC ---
 
         function generateColor() {
-            currentColor = {
-                r: Math.random(),
-                g: Math.random(),
-                b: Math.random()
-            };
+            const smartMode = document.getElementById('smart-mode').checked;
+            
+            // If Smart Mode is ON (and we have trained a bit), try to find a "winner"
+            // We generate 10 random options and pick the one the AI likes best.
+            // Requirement: Must have at least 5 samples so the AI isn't just guessing randomly initially.
+            const attempts = (smartMode && samples >= 5) ? 10 : 1; 
+            
+            let candidates = [];
+            for(let i=0; i<attempts; i++) {
+                candidates.push({ r: Math.random(), g: Math.random(), b: Math.random() });
+            }
+
+            let bestColor = candidates[0];
+            let bestScore = -1;
+
+            // Evaluate candidates to find the one the AI thinks is "Best" (highest output)
+            candidates.forEach(c => {
+                // Peek at the score without permanently updating the screen yet
+                // We use the existing feedForward function
+                let score = brain.feedForward([c.r, c.g, c.b])[0];
+                if(score > bestScore) {
+                    bestScore = score;
+                    bestColor = c;
+                }
+            });
+
+            currentColor = bestColor;
             
             // Update UI Color Box
             const box = document.getElementById('color-box');
             box.style.backgroundColor = `rgb(${currentColor.r*255}, ${currentColor.g*255}, ${currentColor.b*255})`;
 
-            // Get Prediction
+            // Get Final Prediction & Update Visualization
+            // We run this one last time to ensure the "Brain" visual matches the chosen color
             const inputs = [currentColor.r, currentColor.g, currentColor.b];
             const output = brain.feedForward(inputs); // This updates brain.activations
             currentPrediction = output[0];
@@ -505,6 +540,18 @@
             // Educational Tutorial Step
             updateTutorial();
 
+            // Unlock Smart Mode Logic
+            if (samples === 5) {
+                const container = document.getElementById('smart-mode-container');
+                container.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+                container.classList.add('unlock-animation');
+                
+                // Remove the intense pulsing after 5 seconds to not be annoying
+                setTimeout(() => {
+                    container.classList.remove('unlock-animation');
+                }, 5000);
+            }
+
             // Next Round
             generateColor();
         }
@@ -515,20 +562,20 @@
             const p = tutorialBox.querySelector('p');
 
             if (samples === 1) {
-                h3.innerText = "2. Forward Propagation";
-                h3.className = "font-bold text-blue-400 mb-1";
+                h3.innerHTML = `<span class="bg-blue-500/20 p-1 rounded text-xs mr-2">STEP 2</span>Forward Propagation`;
+                h3.className = "font-bold text-blue-400 mb-2 flex items-center";
                 p.innerText = "The signal travels from inputs, through hidden neurons (the brain's processing units), to the output.";
             } else if (samples === 3) {
-                h3.innerText = "3. Weights (The Lines)";
-                h3.className = "font-bold text-purple-400 mb-1";
+                h3.innerHTML = `<span class="bg-purple-500/20 p-1 rounded text-xs mr-2">STEP 3</span>Weights (The Lines)`;
+                h3.className = "font-bold text-purple-400 mb-2 flex items-center";
                 p.innerText = "Thick Green lines = Positive connection. Thick Red lines = Negative connection. The AI is adjusting these right now based on your clicks!";
             } else if (samples === 5) {
-                h3.innerText = "4. Backpropagation";
-                h3.className = "font-bold text-emerald-400 mb-1";
+                h3.innerHTML = `<span class="bg-emerald-500/20 p-1 rounded text-xs mr-2">STEP 4</span>Backpropagation`;
+                h3.className = "font-bold text-emerald-400 mb-2 flex items-center";
                 p.innerText = "When you click, the math calculates the 'Error' and works backward to adjust the weights. That's learning!";
             } else if (samples === 10) {
-                h3.innerText = "5. Generalization";
-                h3.className = "font-bold text-yellow-400 mb-1";
+                h3.innerHTML = `<span class="bg-yellow-500/20 p-1 rounded text-xs mr-2">STEP 5</span>Generalization`;
+                h3.className = "font-bold text-yellow-400 mb-2 flex items-center";
                 p.innerText = "The AI isn't memorizing colors. It's finding patterns (e.g., 'Maybe they like high Red values?').";
             }
         }
