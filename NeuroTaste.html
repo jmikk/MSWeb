@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroTaste: Learn Neural Networks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Animations */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); }
+            50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.8); }
+        }
+        
+        .neuron {
+            transition: all 0.3s ease;
+        }
+        
+        .synapse-line {
+            transition: stroke-width 0.5s, stroke 0.5s;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="w-full p-6 border-b border-slate-700 bg-slate-800 flex justify-between items-center shadow-lg z-10">
+        <div>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">NeuroTaste AI</h1>
+            <p class="text-xs text-slate-400 mt-1">Train a Neural Network to understand your style</p>
+        </div>
+        <div class="flex gap-4 text-sm">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500"></span> Input
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-blue-500"></span> Hidden
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-green-500"></span> Output
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col lg:flex-row h-full">
+        
+        <!-- Left Panel: The Game Interface -->
+        <div class="lg:w-1/3 p-8 flex flex-col items-center justify-center border-r border-slate-700 bg-slate-800/50 relative">
+            
+            <div class="absolute top-4 left-4 bg-slate-900 p-3 rounded-lg border border-slate-700 shadow-xl">
+                <div class="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-1">Accuracy</div>
+                <div id="accuracy-display" class="text-2xl font-mono text-cyan-400">0%</div>
+            </div>
+
+            <div class="absolute top-4 right-4 bg-slate-900 p-3 rounded-lg border border-slate-700 shadow-xl">
+                <div class="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-1">Samples</div>
+                <div id="samples-display" class="text-2xl font-mono text-indigo-400">0</div>
+            </div>
+
+            <!-- Color Swatch -->
+            <div class="mb-8 relative group">
+                <div class="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
+                <div id="color-box" class="relative w-64 h-64 bg-white rounded-xl shadow-2xl transition-colors duration-500 flex items-center justify-center border-4 border-slate-600">
+                    <span id="prediction-text" class="px-3 py-1 bg-black/50 text-white text-sm rounded backdrop-blur-sm opacity-0 transition-opacity">
+                        AI Prediction: Neutral
+                    </span>
+                </div>
+            </div>
+
+            <div class="text-center mb-6">
+                <h2 class="text-xl font-semibold text-white mb-2">Do you like this color?</h2>
+                <p class="text-sm text-slate-400">Teach the AI your preference. It will try to guess correctly over time.</p>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex gap-6 w-full max-w-xs">
+                <button onclick="trainNetwork(0)" class="flex-1 py-4 bg-slate-700 hover:bg-rose-600 text-white rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg border-b-4 border-slate-900 hover:border-rose-800 active:border-0 active:translate-y-1">
+                    👎 Hate It
+                </button>
+                <button onclick="trainNetwork(1)" class="flex-1 py-4 bg-slate-700 hover:bg-emerald-600 text-white rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg border-b-4 border-slate-900 hover:border-emerald-800 active:border-0 active:translate-y-1">
+                    👍 Love It
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: The Neural Network Visualization -->
+        <div class="lg:w-2/3 bg-slate-900 relative overflow-hidden flex flex-col">
+            
+            <!-- Canvas Container -->
+            <div class="flex-grow relative flex items-center justify-center min-h-[300px]" id="canvas-container">
+                <canvas id="networkCanvas" class="z-10"></canvas>
+            </div>
+
+            <!-- Dedicated Tutorial Section (Fixed Position, No Overlap) -->
+            <div class="bg-slate-800 border-t border-slate-700 p-6 shadow-inner z-20">
+                <div id="tutorial-box" class="fade-in max-w-2xl mx-auto">
+                    <h3 class="font-bold text-indigo-300 mb-2 flex items-center gap-2">
+                        <span class="bg-indigo-500/20 p-1 rounded text-xs">INFO</span>
+                        1. The Input Layer
+                    </h3>
+                    <p class="text-slate-300 leading-relaxed">The Red, Green, and Blue values of the color are broken down into numbers (0.0 to 1.0) and fed into the brain.</p>
+                </div>
+            </div>
+
+            <!-- Stats Footer -->
+            <div class="h-12 border-t border-slate-700 bg-slate-900 flex items-center justify-between px-6 text-[10px] text-slate-500 font-mono uppercase tracking-wider">
+                <div>Architecture: 3 Inputs → 4 Hidden → 1 Output</div>
+                <div class="flex gap-4">
+                    <span>LR: 0.2</span>
+                    <span>Sigmoid</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for Explanation -->
+    <div id="welcome-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-slate-800 p-8 rounded-2xl max-w-lg w-full border border-slate-600 shadow-2xl m-4">
+            <h2 class="text-3xl font-bold text-white mb-4">Welcome to NeuroTaste 🧠</h2>
+            <p class="text-slate-300 mb-4 leading-relaxed">
+                You are about to train a real <strong>Neural Network</strong> right in your browser.
+            </p>
+            <ul class="space-y-3 text-sm text-slate-400 mb-6 list-disc list-inside">
+                <li>The AI starts with a "random" brain (it knows nothing).</li>
+                <li>You will see a color. Tell the AI if you <strong>Like</strong> or <strong>Hate</strong> it.</li>
+                <li>Watch the connections (synapses) get thicker or thinner as it learns from your feedback.</li>
+                <li>Eventually, it will start predicting your choice correctly!</li>
+            </ul>
+            <button onclick="startGame()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors">
+                Start Training
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const LAYER_SIZES = [3, 4, 1]; // Input (RGB), Hidden, Output (Like/Dislike)
+        const LEARNING_RATE = 0.2;
+        
+        // --- NEURAL NETWORK CLASS (The Brain) ---
+        class NeuralNetwork {
+            constructor(sizes) {
+                this.sizes = sizes;
+                this.layers = [];
+                this.weights = [];
+                this.biases = [];
+
+                // Initialize weights and biases randomly
+                for (let i = 0; i < sizes.length - 1; i++) {
+                    // Weights connecting layer i to i+1
+                    let weightMatrix = [];
+                    for (let j = 0; j < sizes[i + 1]; j++) {
+                        let weights = [];
+                        for (let k = 0; k < sizes[i]; k++) {
+                            weights.push(Math.random() * 2 - 1); // Random between -1 and 1
+                        }
+                        weightMatrix.push(weights);
+                    }
+                    this.weights.push(weightMatrix);
+                    
+                    // Biases for layer i+1
+                    let biasVector = [];
+                    for (let j = 0; j < sizes[i + 1]; j++) {
+                        biasVector.push(Math.random() * 2 - 1);
+                    }
+                    this.biases.push(biasVector);
+                }
+            }
+
+            // Sigmoid activation function (squeezes numbers between 0 and 1)
+            sigmoid(x) {
+                return 1 / (1 + Math.exp(-x));
+            }
+
+            // Derivative of sigmoid for training
+            sigmoidDerivative(x) {
+                return x * (1 - x);
+            }
+
+            // Feed Forward: Process inputs to get an output
+            feedForward(inputs) {
+                // Keep track of activations for visualization and training
+                this.activations = [inputs]; 
+                
+                let current = inputs;
+
+                for (let i = 0; i < this.sizes.length - 1; i++) {
+                    let nextLayer = [];
+                    for (let j = 0; j < this.sizes[i + 1]; j++) {
+                        let sum = 0;
+                        for (let k = 0; k < this.sizes[i]; k++) {
+                            sum += current[k] * this.weights[i][j][k];
+                        }
+                        sum += this.biases[i][j];
+                        nextLayer.push(this.sigmoid(sum));
+                    }
+                    current = nextLayer;
+                    this.activations.push(current);
+                }
+                return current;
+            }
+
+            // Backpropagation: Learn from error
+            train(inputs, target) {
+                // 1. Forward Pass
+                this.feedForward(inputs);
+
+                let targets = [target]; // Output layer target
+                
+                // Calculate errors (Target - Output)
+                let outputLayerIndex = this.activations.length - 1;
+                let outputErrors = [];
+                
+                for(let i=0; i<this.activations[outputLayerIndex].length; i++) {
+                    outputErrors.push(targets[i] - this.activations[outputLayerIndex][i]);
+                }
+
+                // We only implement training for a simple 3 layer network here for code clarity 
+                // in this educational demo.
+                
+                // --- Update Weights: Hidden -> Output ---
+                let hiddenLayer = this.activations[1];
+                let outputLayer = this.activations[2];
+                let gradients = [];
+
+                for(let i=0; i<outputLayer.length; i++) {
+                    let gradient = outputErrors[i] * this.sigmoidDerivative(outputLayer[i]);
+                    gradients.push(gradient);
+                    // Update Biases
+                    this.biases[1][i] += gradient * LEARNING_RATE;
+                    // Update Weights
+                    for(let j=0; j<hiddenLayer.length; j++) {
+                        let delta = gradient * hiddenLayer[j];
+                        this.weights[1][i][j] += delta * LEARNING_RATE;
+                    }
+                }
+
+                // --- Update Weights: Input -> Hidden ---
+                let hiddenErrors = [];
+                for(let i=0; i<hiddenLayer.length; i++) {
+                    let error = 0;
+                    for(let j=0; j<outputLayer.length; j++) {
+                        error += outputErrors[j] * this.weights[1][j][i];
+                    }
+                    hiddenErrors.push(error);
+                }
+
+                for(let i=0; i<hiddenLayer.length; i++) {
+                    let gradient = hiddenErrors[i] * this.sigmoidDerivative(hiddenLayer[i]);
+                    // Update Biases
+                    this.biases[0][i] += gradient * LEARNING_RATE;
+                    
+                    // Update Weights
+                    let inputLayer = this.activations[0];
+                    for(let j=0; j<inputLayer.length; j++) {
+                        let delta = gradient * inputLayer[j];
+                        this.weights[0][i][j] += delta * LEARNING_RATE;
+                    }
+                }
+            }
+        }
+
+        // --- GAME STATE ---
+        const brain = new NeuralNetwork(LAYER_SIZES);
+        let currentColor = { r: 0, g: 0, b: 0 };
+        let samples = 0;
+        let correctPredictions = 0;
+        let currentPrediction = 0; // 0 to 1
+
+        // --- VISUALIZATION ---
+        const canvas = document.getElementById('networkCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            drawNetwork();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const layerGap = canvas.width / (LAYER_SIZES.length + 1);
+            const nodeRadius = 18;
+
+            // Coordinates for nodes
+            const nodePositions = [];
+
+            // Calculate positions
+            for(let l=0; l<LAYER_SIZES.length; l++) {
+                let layerPositions = [];
+                let layerSize = LAYER_SIZES[l];
+                let layerHeight = canvas.height;
+                let spacing = layerHeight / (layerSize + 1);
+
+                for(let n=0; n<layerSize; n++) {
+                    layerPositions.push({
+                        x: layerGap * (l + 1),
+                        y: spacing * (n + 1),
+                        value: brain.activations ? brain.activations[l][n] : 0
+                    });
+                }
+                nodePositions.push(layerPositions);
+            }
+
+            // Draw Connections (Weights)
+            for(let l=0; l<brain.weights.length; l++) {
+                // l is layer index (0 is input->hidden)
+                let sourceLayer = nodePositions[l];
+                let targetLayer = nodePositions[l+1];
+                let weights = brain.weights[l]; // Matrix [targetNode][sourceNode]
+
+                for(let t=0; t<targetLayer.length; t++) {
+                    for(let s=0; s<sourceLayer.length; s++) {
+                        let weightVal = weights[t][s];
+                        let intensity = Math.abs(weightVal);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(sourceLayer[s].x, sourceLayer[s].y);
+                        ctx.lineTo(targetLayer[t].x, targetLayer[t].y);
+                        
+                        // Line style based on weight
+                        ctx.lineWidth = Math.min(intensity * 3, 6) + 0.5;
+                        if(weightVal > 0) {
+                            ctx.strokeStyle = `rgba(52, 211, 153, ${Math.min(intensity, 0.8)})`; // Greenish for positive
+                        } else {
+                            ctx.strokeStyle = `rgba(244, 63, 94, ${Math.min(intensity, 0.8)})`; // Reddish for negative
+                        }
+                        ctx.stroke();
+
+                        // Animate flow (simple dots moving)
+                        if (brain.activations) {
+                             // Only animate if weight contributes significantly
+                             if (intensity > 0.5) {
+                                 let time = Date.now() / 1000;
+                                 let offset = (time * 2) % 1; 
+                                 let dx = targetLayer[t].x - sourceLayer[s].x;
+                                 let dy = targetLayer[t].y - sourceLayer[s].y;
+                                 
+                                 ctx.fillStyle = weightVal > 0 ? 'rgba(167, 243, 208, 0.8)' : 'rgba(253, 164, 175, 0.8)';
+                                 ctx.beginPath();
+                                 ctx.arc(sourceLayer[s].x + dx*offset, sourceLayer[s].y + dy*offset, 3, 0, Math.PI*2);
+                                 ctx.fill();
+                             }
+                        }
+                    }
+                }
+            }
+
+            // Draw Nodes with Numbers
+            const inputLabels = ["R", "G", "B"];
+            const inputColors = ["#EF4444", "#10B981", "#3B82F6"]; // Red, Green, Blue matching channels
+
+            for(let l=0; l<nodePositions.length; l++) {
+                for(let n=0; n<nodePositions[l].length; n++) {
+                    let node = nodePositions[l][n];
+                    
+                    // Node Circle Background
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, nodeRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = "#1e293b"; // Slate 800 base
+                    ctx.fill();
+                    
+                    // Determine Node Border Color
+                    let brightness = node.value; 
+                    ctx.lineWidth = 3;
+                    
+                    // Default border color (white-ish based on activation)
+                    let strokeColor = `rgba(255, 255, 255, ${brightness + 0.2})`;
+                    
+                    if (l === 0) {
+                        // Input Layer: Color code by RGB channel
+                        strokeColor = inputColors[n];
+                    } else if (l === nodePositions.length - 1) {
+                        // Output Layer: Greenish
+                         strokeColor = "#10B981";
+                    } else {
+                        // Hidden Layer: Blue-ish
+                        strokeColor = "#3B82F6";
+                    }
+                    
+                    ctx.strokeStyle = strokeColor;
+                    ctx.stroke();
+
+                    // Inner Fill (Brightness represents activation)
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, nodeRadius * 0.8, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+                    ctx.fill();
+
+                    // --- NUMBERS (THE MATH) ---
+                    // Text Color: Black if node is bright, White if node is dark
+                    ctx.fillStyle = brightness > 0.5 ? "#000" : "#fff";
+                    ctx.font = "bold 10px monospace"; // Monospace for number alignment
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    
+                    // Show 2 decimal places (e.g., .45)
+                    // Removing leading zero to fit better if needed, but 0.45 is fine
+                    let valueText = node.value.toFixed(2).substring(1); // .45 instead of 0.45 to save space
+                    if(node.value === 1) valueText = "1.0";
+                    if(node.value === 0) valueText = ".00";
+                    
+                    // Shadow for text legibility
+                    if(brightness <= 0.5) {
+                        ctx.shadowColor="black";
+                        ctx.shadowBlur=2;
+                    }
+                    ctx.fillText(valueText, node.x, node.y);
+                    ctx.shadowBlur=0;
+
+                    // --- EXTERNAL LABELS ---
+                    ctx.fillStyle = "#94a3b8"; // Slate 400
+                    ctx.font = "bold 12px Inter";
+                    
+                    if (l === 0) {
+                        // R, G, B labels above input nodes
+                         ctx.fillText(inputLabels[n], node.x, node.y - nodeRadius - 8);
+                    } else if (l === nodePositions.length - 1) {
+                        // Output label
+                        ctx.fillText("Out", node.x, node.y - nodeRadius - 8);
+                    }
+                }
+            }
+
+            requestAnimationFrame(drawNetwork);
+        }
+
+        // --- GAME LOGIC ---
+
+        function generateColor() {
+            currentColor = {
+                r: Math.random(),
+                g: Math.random(),
+                b: Math.random()
+            };
+            
+            // Update UI Color Box
+            const box = document.getElementById('color-box');
+            box.style.backgroundColor = `rgb(${currentColor.r*255}, ${currentColor.g*255}, ${currentColor.b*255})`;
+
+            // Get Prediction
+            const inputs = [currentColor.r, currentColor.g, currentColor.b];
+            const output = brain.feedForward(inputs); // This updates brain.activations
+            currentPrediction = output[0];
+
+            // Update UI Prediction Text
+            const predText = document.getElementById('prediction-text');
+            const boxBorder = document.getElementById('color-box');
+            
+            // Show prediction only after a few samples
+            if (samples > 2) {
+                predText.style.opacity = 1;
+                
+                if (currentPrediction > 0.6) {
+                    predText.innerHTML = `AI thinks you will <span class="text-emerald-300 font-bold">LOVE</span> it (${(currentPrediction*100).toFixed(1)}%)`;
+                    boxBorder.style.borderColor = "#10B981"; // Emerald
+                } else if (currentPrediction < 0.4) {
+                    predText.innerHTML = `AI thinks you will <span class="text-rose-300 font-bold">HATE</span> it (${(currentPrediction*100).toFixed(1)}%)`;
+                    boxBorder.style.borderColor = "#F43F5E"; // Rose
+                } else {
+                    predText.innerHTML = `AI is <span class="text-slate-300 font-bold">UNSURE</span>`;
+                    boxBorder.style.borderColor = "#475569"; // Slate
+                }
+            }
+        }
+
+        function trainNetwork(userPreference) {
+            // userPreference: 0 (Hate) or 1 (Like)
+            const inputs = [currentColor.r, currentColor.g, currentColor.b];
+            
+            // Train multiple times on this single example to reinforce it (Speed up learning for the demo)
+            for(let i=0; i<5; i++) {
+                brain.train(inputs, userPreference);
+            }
+
+            // Update Accuracy Stats
+            // Did the AI guess right? (0.5 threshold)
+            let aiGuess = currentPrediction >= 0.5 ? 1 : 0;
+            if (aiGuess === userPreference) {
+                correctPredictions++;
+            }
+            samples++;
+
+            // Update DOM
+            document.getElementById('samples-display').innerText = samples;
+            let accuracy = Math.round((correctPredictions / samples) * 100);
+            document.getElementById('accuracy-display').innerText = isNaN(accuracy) ? "0%" : accuracy + "%";
+
+            // Educational Tutorial Step
+            updateTutorial();
+
+            // Next Round
+            generateColor();
+        }
+
+        function updateTutorial() {
+            const tutorialBox = document.getElementById('tutorial-box');
+            const h3 = tutorialBox.querySelector('h3');
+            const p = tutorialBox.querySelector('p');
+
+            if (samples === 1) {
+                h3.innerText = "2. Forward Propagation";
+                h3.className = "font-bold text-blue-400 mb-1";
+                p.innerText = "The signal travels from inputs, through hidden neurons (the brain's processing units), to the output.";
+            } else if (samples === 3) {
+                h3.innerText = "3. Weights (The Lines)";
+                h3.className = "font-bold text-purple-400 mb-1";
+                p.innerText = "Thick Green lines = Positive connection. Thick Red lines = Negative connection. The AI is adjusting these right now based on your clicks!";
+            } else if (samples === 5) {
+                h3.innerText = "4. Backpropagation";
+                h3.className = "font-bold text-emerald-400 mb-1";
+                p.innerText = "When you click, the math calculates the 'Error' and works backward to adjust the weights. That's learning!";
+            } else if (samples === 10) {
+                h3.innerText = "5. Generalization";
+                h3.className = "font-bold text-yellow-400 mb-1";
+                p.innerText = "The AI isn't memorizing colors. It's finding patterns (e.g., 'Maybe they like high Red values?').";
+            }
+        }
+
+        function startGame() {
+            document.getElementById('welcome-modal').classList.add('hidden');
+            resizeCanvas();
+            generateColor(); // Start the loop
+        }
+
+    </script>
+</body>
+</html>
