@@ -6,7 +6,6 @@
     <title>Transformation Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Strict lockdown of the viewport to prevent iPad "rubber-banding" */
         html, body {
             margin: 0;
             padding: 0;
@@ -29,7 +28,7 @@
         .canvas-container {
             position: relative;
             width: 100%;
-            height: 55vh;
+            height: 65vh; /* Increased to fit Y axis -10 to 10 */
             background-color: #ffffff;
             border-bottom: 2px solid #e2e8f0;
             overflow: hidden;
@@ -54,7 +53,7 @@
         }
         .modal.active { display: flex; }
         
-        button, input {
+        button, input, select {
             user-select: auto;
             -webkit-user-select: auto;
             touch-action: manipulation; 
@@ -67,17 +66,11 @@
             touch-action: pan-y;
             padding: 1rem;
         }
-
-        /* Improved labels for high-dpi mobile screens */
-        .coord-label {
-            pointer-events: none;
-            text-shadow: 0 0 4px white, 0 0 4px white;
-        }
     </style>
 </head>
 <body class="font-sans">
 
-    <header class="p-4 bg-white border-b border-slate-200 shadow-sm shrink-0">
+    <header class="p-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
         <h1 class="text-xl font-bold text-slate-800 text-center">Transformation Lab</h1>
         <div class="mt-1 flex justify-center gap-4 text-xs font-mono font-bold">
             <div class="text-blue-600">Crosshair: (<span id="val-x">0</span>, <span id="val-y">0</span>)</div>
@@ -91,40 +84,52 @@
         </div>
 
         <div class="controls-area">
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
-                <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
-                    <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm transition-colors">1. Pre-Image</button>
-                    <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600 transition-colors">2. Image</button>
+            <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
+                        <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm transition-colors">1. Pre-Image</button>
+                        <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600 transition-colors">2. Image</button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:bg-indigo-100 text-sm">Translate</button>
+                        <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:bg-amber-100 text-sm">Rotate</button>
+                        <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:bg-emerald-100 text-sm">Reflect</button>
+                        <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:bg-slate-700 transition-transform active:scale-95 text-sm">Check Work</button>
+                    </div>
+
+                    <button id="btn-clear" class="w-full py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold border border-red-100">Clear All</button>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                    <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:bg-indigo-100">Translate</button>
-                    <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:bg-amber-100">Rotate</button>
-                    <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:bg-emerald-100">Reflect</button>
-                    <button id="btn-check" class="p-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:bg-slate-700 transition-transform active:scale-95">
-                        Check Work
-                    </button>
-                </div>
-
-                <div class="flex gap-2 justify-center">
-                    <button id="btn-clear" class="px-6 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold border border-red-100">Clear All</button>
+                <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 shadow-sm">
+                    <h2 class="text-sm font-bold text-blue-800 mb-2 uppercase tracking-wider">Challenge: Plot This Shape</h2>
+                    <div class="flex gap-2 mb-3">
+                        <select id="point-count" class="flex-1 p-2 rounded-lg border border-blue-200 text-sm font-bold bg-white">
+                            <option value="3">Triangle (3)</option>
+                            <option value="4" selected>Quadrilateral (4)</option>
+                            <option value="5">Pentagon (5)</option>
+                        </select>
+                        <button id="btn-generate" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700">Generate</button>
+                    </div>
+                    <div id="coords-display" class="bg-white p-3 rounded-xl border border-blue-100 min-h-[80px] font-mono text-sm flex flex-col justify-center items-center text-blue-900">
+                        <span class="italic text-slate-400 text-center">Click generate to see coordinates...</span>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Modals -->
     <div id="translateModal" class="modal p-4" onclick="closeModal()">
         <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
             <h2 class="text-xl font-bold mb-4">Translate</h2>
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-bold text-slate-600">Horizontal (x)</label>
-                    <input type="number" id="transX" value="0" step="0.5" class="w-full p-3 bg-slate-50 border rounded-lg">
+                    <input type="number" id="transX" value="0" step="1" class="w-full p-3 bg-slate-50 border rounded-lg">
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-slate-600">Vertical (y)</label>
-                    <input type="number" id="transY" value="0" step="0.5" class="w-full p-3 bg-slate-50 border rounded-lg">
+                    <input type="number" id="transY" value="0" step="1" class="w-full p-3 bg-slate-50 border rounded-lg">
                 </div>
                 <button onclick="setTransformation('translate')" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Apply Transformation</button>
                 <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2">Cancel</button>
@@ -151,7 +156,6 @@
             <div class="space-y-2">
                 <button onclick="setTransformation('reflect', 'x')" class="w-full p-4 border rounded-xl font-bold">Across X-Axis</button>
                 <button onclick="setTransformation('reflect', 'y')" class="w-full p-4 border rounded-xl font-bold">Across Y-Axis</button>
-                <button onclick="setTransformation('reflect', 'custom')" class="w-full p-4 border rounded-xl bg-emerald-50 text-emerald-700 font-bold">Custom Line</button>
                 <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2 mt-2">Cancel</button>
             </div>
         </div>
@@ -164,13 +168,13 @@
         const valX = document.getElementById('val-x');
         const valY = document.getElementById('val-y');
         const statusMsg = document.getElementById('status-msg');
+        const coordsDisplay = document.getElementById('coords-display');
 
         let prePoints = [];
         let imgPoints = [];
         let targetPoints = [];
-        let reflectionLine = null;
         let currentMode = 'pre'; 
-        let gridSize = 25;
+        let gridSize = 30;
         let origin = { x: 0, y: 0 };
         const SNAP = 0.5;
 
@@ -183,7 +187,6 @@
             resize();
             window.addEventListener('resize', resize);
             
-            // Interaction logic
             const getPos = (e) => {
                 const rect = canvas.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -201,25 +204,16 @@
             const handleEnd = (e) => {
                 const pos = getPos(e.changedTouches ? e.changedTouches[0] : e);
                 const cart = toCartesian(pos.x, pos.y);
-
-                if (currentMode === 'reflect-line') {
-                    if (!reflectionLine) reflectionLine = [];
-                    reflectionLine.push(cart);
-                    if (reflectionLine.length === 2) calculateCustomReflection();
-                } else {
-                    let list = currentMode === 'pre' ? prePoints : imgPoints;
-                    const idx = list.findIndex(p => Math.abs(p.x - cart.x) < 0.2 && Math.abs(p.y - cart.y) < 0.2);
-                    if (idx !== -1) list.splice(idx, 1);
-                    else list.push(cart);
-                    isAnimatingCheck = false;
-                    isRotating = false;
-                }
+                let list = currentMode === 'pre' ? prePoints : imgPoints;
+                const idx = list.findIndex(p => Math.abs(p.x - cart.x) < 0.25 && Math.abs(p.y - cart.y) < 0.25);
+                if (idx !== -1) list.splice(idx, 1);
+                else list.push(cart);
+                isAnimatingCheck = false;
+                isRotating = false;
             };
 
             canvas.addEventListener('mousemove', handleMove);
-            canvas.addEventListener('mousedown', (e) => {}); // placeholder
             canvas.addEventListener('mouseup', handleEnd);
-
             canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleMove(e); }, {passive:false});
             canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive:false});
             canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(e); }, {passive:false});
@@ -228,39 +222,127 @@
             document.getElementById('mode-img').onclick = () => switchWorkflow('img');
             document.getElementById('btn-clear').onclick = clearAll;
             document.getElementById('btn-check').onclick = checkWork;
+            document.getElementById('btn-generate').onclick = generateRandomShape;
             
             requestAnimationFrame(gameLoop);
         }
 
-        function gameLoop() {
-            draw();
-            requestAnimationFrame(gameLoop);
+        function generateRandomShape() {
+            clearAll();
+            const count = parseInt(document.getElementById('point-count').value);
+            coordsDisplay.innerHTML = "";
+            for(let i = 0; i < count; i++) {
+                const rx = (Math.floor(Math.random() * 21) - 10); // -10 to 10
+                const ry = (Math.floor(Math.random() * 21) - 10); // -10 to 10
+                const pTag = document.createElement('div');
+                pTag.className = "font-bold";
+                pTag.innerHTML = `P${i+1}: <span class="text-blue-600">(${rx}, ${ry})</span>`;
+                coordsDisplay.appendChild(pTag);
+            }
+            statusMsg.textContent = "Plot the coordinates shown!";
+        }
+
+        function gameLoop() { draw(); requestAnimationFrame(gameLoop); }
+
+        function resize() {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width * devicePixelRatio;
+            canvas.height = rect.height * devicePixelRatio;
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+            origin.x = rect.width / 2;
+            origin.y = rect.height / 2;
+            // Force -10 to 10 to fit on both axes
+            const minDim = Math.min(rect.width, rect.height);
+            gridSize = Math.floor(minDim / 24); 
+        }
+
+        function toCartesian(px, py) {
+            return { x: Math.round((px - origin.x) / gridSize / SNAP) * SNAP, y: Math.round((origin.y - py) / gridSize / SNAP) * SNAP };
+        }
+
+        function toPixels(cx, cy) {
+            return { x: origin.x + (cx * gridSize), y: origin.y - (cy * gridSize) };
+        }
+
+        function draw() {
+            const w = canvas.width / devicePixelRatio;
+            const h = canvas.height / devicePixelRatio;
+            ctx.clearRect(0, 0, w, h);
+
+            // Sub-grid (0.5 increments)
+            ctx.beginPath(); ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
+            for (let i = -12; i <= 12; i += 0.5) { 
+                let px = toPixels(i,0); ctx.moveTo(px.x,0); ctx.lineTo(px.x,h);
+                let py = toPixels(0,i); ctx.moveTo(0,py.y); ctx.lineTo(w,py.y);
+            }
+            ctx.stroke();
+
+            // Main Grid (1 increments)
+            ctx.beginPath(); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.5;
+            for (let i = -12; i <= 12; i += 1) { 
+                let px = toPixels(i,0); ctx.moveTo(px.x,0); ctx.lineTo(px.x,h);
+                let py = toPixels(0,i); ctx.moveTo(0,py.y); ctx.lineTo(w,py.y);
+            }
+            ctx.stroke();
+
+            // Main Axes
+            ctx.beginPath(); ctx.strokeStyle = '#475569'; ctx.lineWidth = 2.5;
+            ctx.moveTo(0, origin.y); ctx.lineTo(w, origin.y);
+            ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, h);
+            ctx.stroke();
+
+            // Labels -10 to 10
+            ctx.fillStyle = '#1e293b'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+            for (let i = -10; i <= 10; i += 2) { 
+                if(i!==0){ 
+                    let px = toPixels(i,0); ctx.fillText(i, px.x, origin.y+15); 
+                    let py = toPixels(0,i); ctx.fillText(i, origin.x-15, py.y+4); 
+                } 
+            }
+
+            drawShape(prePoints, '#3b82f6', 'P');
+            if (isRotating && prePoints.length > 0) {
+                rotationProgress = Math.min(1, rotationProgress + 0.015);
+                const a = rotationTargetAngle * rotationProgress;
+                const rp = prePoints.map(p => ({ x: p.x * Math.cos(a) - p.y * Math.sin(a), y: p.x * Math.sin(a) + p.y * Math.cos(a) }));
+                drawShape(rp, '#f59e0b', "R", 0.4);
+            }
+            if (isAnimatingCheck && targetPoints.length > 0) {
+                drawShape(targetPoints, '#10b981', "T", 0.3);
+            }
+            drawShape(imgPoints, '#ef4444', "P'");
+        }
+
+        function drawShape(list, color, labelPrefix, alpha = 1) {
+            if (list.length === 0) return;
+            ctx.save(); ctx.globalAlpha = alpha;
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 3;
+            list.forEach((p, i) => {
+                const pix = toPixels(p.x, p.y);
+                if (i === 0) ctx.moveTo(pix.x, pix.y); else ctx.lineTo(pix.x, pix.y);
+            });
+            if(list.length > 2) ctx.closePath();
+            ctx.stroke();
+            list.forEach((p, i) => {
+                const pix = toPixels(p.x, p.y);
+                ctx.beginPath(); ctx.fillStyle = color; ctx.arc(pix.x, pix.y, 5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#000000'; ctx.font = 'bold 10px monospace';
+                ctx.fillText(`${labelPrefix}${i+1}`, pix.x, pix.y - 12);
+            });
+            ctx.restore();
         }
 
         function switchWorkflow(mode) {
             currentMode = mode;
-            isAnimatingCheck = false;
-            isRotating = false;
-            const preBtn = document.getElementById('mode-pre');
-            const imgBtn = document.getElementById('mode-img');
-            preBtn.className = currentMode === 'pre' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
-            imgBtn.className = currentMode === 'img' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
-            statusMsg.textContent = currentMode === 'pre' ? "Place Pre-Image points." : "Draw the resulting Image.";
+            document.getElementById('mode-pre').className = mode === 'pre' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
+            document.getElementById('mode-img').className = mode === 'img' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
+            statusMsg.textContent = mode === 'pre' ? "Place Pre-Image points." : "Draw the resulting Image.";
         }
-
         function openModal(id) { document.getElementById(id).classList.add('active'); }
         function closeModal() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); }
-
-        function clearAll() {
-            prePoints = []; imgPoints = []; targetPoints = []; reflectionLine = null;
-            isAnimatingCheck = false; isRotating = false;
-            switchWorkflow('pre');
-        }
-
+        function clearAll() { prePoints = []; imgPoints = []; targetPoints = []; isAnimatingCheck = false; isRotating = false; switchWorkflow('pre'); }
         function setTransformation(type, val) {
-            if (prePoints.length === 0) { alert("Draw a Pre-Image first!"); closeModal(); return; }
-            targetPoints = []; reflectionLine = null; isAnimatingCheck = false; isRotating = false;
-
+            if (prePoints.length === 0) { alert("Draw a shape first!"); return; }
             if (type === 'translate') {
                 const dx = parseFloat(document.getElementById('transX').value) || 0;
                 const dy = parseFloat(document.getElementById('transY').value) || 0;
@@ -277,160 +359,14 @@
             } else if (type === 'reflect') {
                 if (val === 'x') targetPoints = prePoints.map(p => ({ x: p.x, y: -p.y }));
                 else if (val === 'y') targetPoints = prePoints.map(p => ({ x: -p.x, y: p.y }));
-                else if (val === 'custom') { currentMode = 'reflect-line'; closeModal(); return; }
             }
             switchWorkflow('img'); closeModal();
         }
-
-        function calculateCustomReflection() {
-            const p1 = reflectionLine[0], p2 = reflectionLine[1];
-            targetPoints = prePoints.map(p => {
-                const dx = p2.x - p1.x, dy = p2.y - p1.y;
-                if (dx === 0 && dy === 0) return p;
-                const a = dy, b = -dx, c = dx * p1.y - dy * p1.x;
-                const d = (a * p.x + b * p.y + c) / (a * a + b * b);
-                return { x: p.x - 2 * a * d, y: p.y - 2 * b * d };
-            });
-            switchWorkflow('img');
+        function checkWork() { 
+            if (targetPoints.length === 0) { alert("Apply a transformation first!"); return; }
+            isAnimatingCheck = true; 
         }
 
-        function checkWork() {
-            if (targetPoints.length === 0) { alert("Set a transformation first!"); return; }
-            isAnimatingCheck = true;
-            if (imgPoints.length !== targetPoints.length) {
-                statusMsg.innerHTML = `<span class='text-amber-600 font-bold'>Need ${targetPoints.length} points.</span>`;
-                return;
-            }
-            let correct = 0;
-            targetPoints.forEach(tp => {
-                if (imgPoints.some(ip => Math.abs(ip.x - tp.x) < 0.25 && Math.abs(ip.y - tp.y) < 0.25)) correct++;
-            });
-            statusMsg.innerHTML = correct === targetPoints.length ? "<span class='text-emerald-600 font-bold'>Correct!</span>" : `<span class='text-red-600 font-bold'>Score: ${correct}/${targetPoints.length}</span>`;
-        }
-
-        function resize() {
-            const rect = container.getBoundingClientRect();
-            canvas.width = rect.width * devicePixelRatio;
-            canvas.height = rect.height * devicePixelRatio;
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-            origin.x = rect.width / 2;
-            origin.y = rect.height / 2;
-            gridSize = Math.max(18, Math.floor(Math.min(rect.width, rect.height) / 35)); 
-        }
-
-        function toCartesian(px, py) {
-            return { x: Math.round((px - origin.x) / gridSize / SNAP) * SNAP, y: Math.round((origin.y - py) / gridSize / SNAP) * SNAP };
-        }
-
-        function toPixels(cx, cy) {
-            return { x: origin.x + (cx * gridSize), y: origin.y - (cy * gridSize) };
-        }
-
-        function drawShape(list, color, labelPrefix, alpha = 1) {
-            if (list.length === 0) return;
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            
-            // Draw lines
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            list.forEach((p, i) => {
-                const pix = toPixels(p.x, p.y);
-                if (i === 0) ctx.moveTo(pix.x, pix.y);
-                else ctx.lineTo(pix.x, pix.y);
-            });
-            if(list.length > 2) ctx.closePath();
-            ctx.stroke();
-
-            // Draw points and labels
-            list.forEach((p, i) => {
-                const pix = toPixels(p.x, p.y);
-                ctx.beginPath();
-                ctx.fillStyle = color;
-                ctx.arc(pix.x, pix.y, 5, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // FIX FOR iOS: Force High-Contrast Labels
-                ctx.save();
-                ctx.globalAlpha = 1.0; 
-                ctx.font = 'bold 12px monospace';
-                ctx.textAlign = 'center';
-                
-                // White glow/outline for legibility
-                ctx.shadowColor = 'white';
-                ctx.shadowBlur = 4;
-                ctx.fillStyle = '#000000';
-                
-                // Vertex label (P1)
-                ctx.fillText(`${labelPrefix}${i+1}`, pix.x, pix.y - 24);
-                
-                // Coordinates (x, y)
-                ctx.font = 'bold 10px monospace';
-                ctx.fillText(`(${p.x}, ${p.y})`, pix.x, pix.y - 12);
-                ctx.restore();
-            });
-            ctx.restore();
-        }
-
-        function draw() {
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
-            ctx.clearRect(0, 0, w, h);
-            
-            // Grid
-            ctx.beginPath(); ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1;
-            for (let x = -20; x <= 20; x += 0.5) { let p = toPixels(x,0); ctx.moveTo(p.x,0); ctx.lineTo(p.x,h); }
-            for (let y = -20; y <= 20; y += 0.5) { let p = toPixels(0,y); ctx.moveTo(0,p.y); ctx.lineTo(w,p.y); }
-            ctx.stroke();
-
-            ctx.beginPath(); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.5;
-            for (let x = -20; x <= 20; x += 1) { let p = toPixels(x,0); ctx.moveTo(p.x,0); ctx.lineTo(p.x,h); }
-            for (let y = -20; y <= 20; y += 1) { let p = toPixels(0,y); ctx.moveTo(0,p.y); ctx.lineTo(w,p.y); }
-            ctx.stroke();
-
-            ctx.beginPath(); ctx.strokeStyle = '#475569'; ctx.lineWidth = 2.5;
-            ctx.moveTo(0, origin.y); ctx.lineTo(w, origin.y);
-            ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, h);
-            ctx.stroke();
-
-            // Axis Text
-            ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-            for (let x = -20; x <= 20; x += 2) { if(x!==0){ let p = toPixels(x,0); ctx.fillText(x, p.x, origin.y+14); } }
-            for (let y = -20; y <= 20; y += 2) { if(y!==0){ let p = toPixels(0,y); ctx.fillText(y, origin.x-10, p.y+4); } }
-
-            if (reflectionLine) {
-                ctx.setLineDash([5, 5]); ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
-                if (reflectionLine.length === 2) {
-                    const dx = reflectionLine[1].x - reflectionLine[0].x, dy = reflectionLine[1].y - reflectionLine[0].y;
-                    const s = toPixels(reflectionLine[0].x - dx*50, reflectionLine[0].y - dy*50), e = toPixels(reflectionLine[0].x + dx*50, reflectionLine[0].y + dy*50);
-                    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.stroke();
-                }
-                ctx.setLineDash([]);
-            }
-
-            drawShape(prePoints, '#3b82f6', 'P');
-
-            if (isRotating && prePoints.length > 0) {
-                rotationProgress = Math.min(1, rotationProgress + 0.015);
-                const a = rotationTargetAngle * rotationProgress;
-                const rp = prePoints.map(p => ({ x: p.x * Math.cos(a) - p.y * Math.sin(a), y: p.x * Math.sin(a) + p.y * Math.cos(a) }));
-                drawShape(rp, '#f59e0b', "R", 0.4);
-            }
-
-            if (isAnimatingCheck && targetPoints.length > 0) {
-                drawShape(targetPoints, '#10b981', "T", 0.3);
-                targetPoints.forEach(tp => {
-                    const pix = toPixels(tp.x, tp.y);
-                    const isCorrect = imgPoints.some(ip => Math.abs(ip.x - tp.x) < 0.25 && Math.abs(ip.y - tp.y) < 0.25);
-                    ctx.beginPath(); ctx.strokeStyle = isCorrect ? '#10b981' : '#f43f5e';
-                    ctx.lineWidth = 2; ctx.arc(pix.x, pix.y, 12, 0, Math.PI * 2); ctx.stroke();
-                });
-            }
-
-            drawShape(imgPoints, '#ef4444', "P'");
-        }
-        
         window.onload = init;
     </script>
 </body>
