@@ -29,24 +29,18 @@
 
         /**
          * Corrected Icon Component for Lucide browser distribution.
-         * Uses lucide.createIcons but wraps the icon in a persistent span 
-         * to prevent React from encountering 'removeChild' errors when 
-         * Lucide replaces the <i> tag with an <svg>.
          */
         const Icon = ({ name, size = 18, className = "" }) => {
             const wrapperRef = useRef(null);
 
             useEffect(() => {
                 if (window.lucide && wrapperRef.current) {
-                    // Create a fresh <i> element to be transformed
-                    // This prevents Lucide from modifying an element React is tracking directly
                     const iconElement = document.createElement('i');
                     iconElement.setAttribute('data-lucide', name);
                     iconElement.style.width = `${size}px`;
                     iconElement.style.height = `${size}px`;
                     iconElement.style.display = 'inline-block';
                     
-                    // Clear previous content and append new icon placeholder
                     wrapperRef.current.innerHTML = '';
                     wrapperRef.current.appendChild(iconElement);
 
@@ -63,7 +57,6 @@
                 }
             }, [name, size, className]);
 
-            // We use a span as a stable container that React "owns"
             return (
                 <span 
                     ref={wrapperRef} 
@@ -80,6 +73,13 @@
             const [lastUpdated, setLastUpdated] = useState(null);
             const [showLogin, setShowLogin] = useState(true);
             const [showHelp, setShowHelp] = useState(false);
+            
+            // New state for Target Date (defaults to May 28th of current/next relevant year)
+            const [targetDate, setTargetDate] = useState(() => {
+                const now = new Date();
+                const year = now.getMonth() > 4 ? now.getFullYear() + 1 : now.getFullYear();
+                return `${year}-05-28`;
+            });
 
             const parseCSV = (text) => {
                 const lines = text.split(/\r?\n/);
@@ -124,6 +124,24 @@
                 }
             };
 
+            // Utility to calculate weekdays remaining
+            const calculateRemainingWeekdays = (target) => {
+                const start = new Date();
+                const end = new Date(target);
+                if (end < start) return 0;
+                
+                let count = 0;
+                let cur = new Date(start.getTime());
+                while (cur <= end) {
+                    const dayOfWeek = cur.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+                    cur.setDate(cur.getDate() + 1);
+                }
+                return count;
+            };
+
+            const remainingWeekdays = useMemo(() => calculateRemainingWeekdays(targetDate), [targetDate]);
+
             const ComparisonCell = ({ studentKey, field }) => {
                 if (!baselineData || !currentData) return <span>-</span>;
                 const baseRaw = baselineData.get(studentKey)?.[field] || "0";
@@ -148,6 +166,25 @@
                             <Icon name={isPositive ? "TrendingUp" : "TrendingDown"} size={12} />
                             {isPositive ? "+" : ""}{diff.toFixed(1)}%
                         </div>
+                    </div>
+                );
+            };
+
+            const DailyRequirementCell = ({ studentKey }) => {
+                if (!currentData) return <span>-</span>;
+                const currRaw = currentData.get(studentKey)?.['Percent Complete (Count)'] || "0";
+                const currVal = parseFloat(currRaw) || 0;
+                const remaining = 100 - currVal;
+                
+                if (remaining <= 0) return <span className="text-green-600 font-bold italic">Done</span>;
+                if (remainingWeekdays <= 0) return <span className="text-red-500 font-bold text-[10px]">Overdue</span>;
+
+                const reqDaily = (remaining / remainingWeekdays).toFixed(2);
+                
+                return (
+                    <div className="flex flex-col items-center">
+                        <span className="text-sm font-bold text-slate-700">{reqDaily}%</span>
+                        <span className="text-[9px] text-slate-400 font-medium leading-none">per weekday</span>
                     </div>
                 );
             };
@@ -198,7 +235,16 @@
                                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Daily Progress Monitor</h1>
                                 <p className="text-slate-500 mt-1">{lastUpdated ? `Last Sync: ${lastUpdated}` : "Load a morning CSV to set the baseline"}</p>
                             </div>
-                            <div className="flex flex-wrap gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Target Date:</span>
+                                    <input 
+                                        type="date" 
+                                        className="text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                                        value={targetDate}
+                                        onChange={(e) => setTargetDate(e.target.value)}
+                                    />
+                                </div>
                                 <button onClick={() => setShowHelp(!showHelp)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"><Icon name="HelpCircle" /> Help</button>
                                 <button onClick={resetSession} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"><Icon name="RotateCcw" /> Reset Session</button>
                                 <label className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-all shadow-md shadow-blue-100">
@@ -224,10 +270,14 @@
                         )}
 
                         {currentData && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
                                     <div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Enrollments</div><div className="text-3xl font-bold text-slate-800">{currentData.size}</div></div>
                                     <Icon name="Activity" size={40} className="text-blue-100" />
+                                </div>
+                                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                                    <div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider">Weekdays Left</div><div className="text-3xl font-bold text-slate-800">{remainingWeekdays}</div></div>
+                                    <Icon name="Calendar" size={40} className="text-blue-100" />
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Tracking Status</div>
@@ -256,6 +306,7 @@
                                             <tr className="bg-slate-50 border-b border-slate-200">
                                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase">Student / Course</th>
                                                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32">Complete (Count)</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 border-x border-slate-100 bg-blue-50/30">Required Daily %</th>
                                                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32">Rel. Grade</th>
                                                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32">Overall Grade</th>
                                                 <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32">Actual Grade</th>
@@ -271,6 +322,7 @@
                                                             <div className="text-xs text-slate-500 truncate max-w-xs">{student['Course Name']}</div>
                                                         </td>
                                                         <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Percent Complete (Count)" /></td>
+                                                        <td className="px-4 py-4 text-center border-x border-slate-50 bg-blue-50/10"><DailyRequirementCell studentKey={key} /></td>
                                                         <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Relative Grade" /></td>
                                                         <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Overall Grade" /></td>
                                                         <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Actual Grade" /></td>
@@ -288,7 +340,7 @@
                                     <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-100 border border-green-300 rounded shadow-sm"></div> Improved</div>
                                     <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-100 border border-red-300 rounded shadow-sm"></div> Decreased</div>
                                 </div>
-                                <div className="text-[10px] text-slate-400 italic">Student data is processed locally and never stored.</div>
+                                <div className="text-[10px] text-slate-400 italic">Student data is processed locally and never stored. Required daily % assumes 100% target.</div>
                             </div>
                         )}
                     </div>
