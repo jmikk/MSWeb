@@ -20,7 +20,6 @@
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .lucide { display: inline-block; vertical-align: middle; }
         
-        /* Specific Button Match for "Export To Excel" */
         .edgenuity-excel-btn {
             background-color: #000066;
             color: white;
@@ -34,6 +33,12 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             font-size: 18px;
         }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -41,6 +46,14 @@
 
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
+
+        const DEFAULT_LINKS = [
+            { id: '1', name: 'Group Progress', url: 'https://r06.core.learn.edgenuity.com/Educator/TandR/GroupProgress.aspx', icon: 'Users' },
+            { id: '2', name: 'Attendance Log', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/AttendanceLog.aspx', icon: 'ClipboardList' },
+            { id: '3', name: 'EX Attendance', url: 'https://educator.ex.edgenuity.com/attendance-log', icon: 'Clock' },
+            { id: '4', name: 'Dashboard', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/Dashboard.aspx', icon: 'Layout' },
+            { id: '5', name: 'OpenSis', url: 'https://rssp.opensis.com/', icon: 'GraduationCap' }
+        ];
 
         const Icon = ({ name, size = 18, className = "" }) => {
             const wrapperRef = useRef(null);
@@ -54,13 +67,117 @@
                     wrapperRef.current.innerHTML = '';
                     wrapperRef.current.appendChild(iconElement);
                     window.lucide.createIcons({
-                        icons: { [name]: window.lucide.icons[name] },
+                        icons: { [name]: window.lucide.icons[name] || window.lucide.icons['ExternalLink'] },
                         attrs: { 'stroke-width': 2, width: size, height: size, class: `lucide lucide-${name.toLowerCase()} ${className}` },
                         nameAttr: 'data-lucide'
                     });
                 }
             }, [name, size, className]);
             return <span ref={wrapperRef} className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size, verticalAlign: 'middle' }} />;
+        };
+
+        const QuickLinks = ({ className = "" }) => {
+            const [links, setLinks] = useState(() => {
+                const saved = localStorage.getItem('edgenuity_quick_links');
+                return saved ? JSON.parse(saved) : DEFAULT_LINKS;
+            });
+            const [isEditing, setIsEditing] = useState(false);
+            const [newLink, setNewLink] = useState({ name: '', url: '' });
+
+            useEffect(() => {
+                localStorage.setItem('edgenuity_quick_links', JSON.stringify(links));
+            }, [links]);
+
+            const addLink = (e) => {
+                e.preventDefault();
+                if (!newLink.name || !newLink.url) return;
+                let url = newLink.url;
+                if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+                
+                setLinks([...links, { ...newLink, url, id: Date.now().toString(), icon: 'Link' }]);
+                setNewLink({ name: '', url: '' });
+            };
+
+            const removeLink = (id) => {
+                setLinks(links.filter(l => l.id !== id));
+            };
+
+            const resetToDefault = () => {
+                if (confirm("Reset all shortcuts to original defaults?")) {
+                    setLinks(DEFAULT_LINKS);
+                }
+            };
+
+            return (
+                <div className={`relative ${className}`}>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hotlinks</span>
+                        <button 
+                            onClick={() => setIsEditing(!isEditing)}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        >
+                            <Icon name={isEditing ? "Check" : "Settings"} size={12} />
+                            {isEditing ? "Done" : "Manage"}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                        {links.map(link => (
+                            <div key={link.id} className="relative group">
+                                <a 
+                                    href={link.url} 
+                                    target="_blank" 
+                                    className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm truncate"
+                                >
+                                    <Icon name={link.icon || 'Link'} size={14} className="shrink-0" /> 
+                                    <span className="truncate">{link.name}</span>
+                                </a>
+                                {isEditing && (
+                                    <button 
+                                        onClick={() => removeLink(link.id)}
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600"
+                                    >
+                                        <Icon name="X" size={10} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                        {isEditing && (
+                            <button 
+                                onClick={resetToDefault}
+                                className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 border border-dashed border-slate-300 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-200 transition-all shadow-sm"
+                            >
+                                <Icon name="RotateCcw" size={14} /> Reset Defaults
+                            </button>
+                        )}
+                    </div>
+
+                    {isEditing && (
+                        <form onSubmit={addLink} className="mt-3 p-3 bg-slate-100 rounded-xl border border-slate-200 animate-in">
+                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Add New Shortcut</p>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="Site Name" 
+                                    className="flex-1 text-xs p-2 rounded border outline-none focus:ring-2 focus:ring-blue-400"
+                                    value={newLink.name}
+                                    onChange={e => setNewLink({...newLink, name: e.target.value})}
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="URL (e.g. google.com)" 
+                                    className="flex-1 text-xs p-2 rounded border outline-none focus:ring-2 focus:ring-blue-400"
+                                    value={newLink.url}
+                                    onChange={e => setNewLink({...newLink, url: e.target.value})}
+                                />
+                                <button type="submit" className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors">
+                                    <Icon name="Plus" size={14} />
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            );
         };
 
         const HowToModal = ({ isOpen, onClose }) => {
@@ -73,7 +190,6 @@
                             <button onClick={onClose} className="hover:bg-blue-500 p-1 rounded-full transition-colors"><Icon name="X" /></button>
                         </div>
                         <div className="p-8 space-y-8 overflow-y-auto max-h-[80vh]">
-                            {/* Blurb */}
                             <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
                                 <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                                     <Icon name="Target" size={18} className="text-blue-600"/> 
@@ -256,16 +372,21 @@
                 return (
                     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
                         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-                            <div className="text-center mb-8">
+                            <div className="text-center mb-6">
                                 <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200">
                                     <Icon name="BookOpen" size={32} className="text-white" />
                                 </div>
                                 <h1 className="text-2xl font-bold text-slate-800">Educator Dashboard</h1>
                                 <p className="text-slate-500 mt-2 text-sm px-4">Ensure you are logged into Edgenuity before continuing.</p>
                             </div>
-                            <div className="space-y-3">
+                            
+                            <div className="space-y-3 mb-8">
                                 <a href="https://r06.core.learn.edgenuity.com/Login/" target="_blank" rel="noreferrer" className="block w-full text-center py-3 px-4 bg-slate-800 hover:bg-black text-white rounded-xl font-medium transition-colors">1. Open Edgenuity Login</a>
                                 <button onClick={() => setShowLogin(false)} className="block w-full text-center py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-md">2. Enter Dashboard</button>
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-100">
+                                <QuickLinks />
                             </div>
                         </div>
                     </div>
@@ -276,22 +397,26 @@
                 <div className="min-h-screen bg-slate-50 p-4 md:p-8">
                     <HowToModal isOpen={isHowToOpen} onClose={() => setIsHowToOpen(false)} />
                     <div className="max-w-7xl mx-auto">
-                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
                             <div>
                                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Daily Progress Monitor</h1>
                                 <p className="text-slate-500 mt-1 font-medium">{lastUpdated ? `Last Sync: ${lastUpdated}` : "Load a morning CSV to set the baseline"}</p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Date:</span>
-                                    <input type="date" className="text-xs font-semibold text-slate-700 outline-none cursor-pointer" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+                            
+                            <div className="flex flex-col gap-4 w-full lg:max-w-xl">
+                                <div className="flex flex-wrap items-center gap-3 justify-end">
+                                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Date:</span>
+                                        <input type="date" className="text-xs font-semibold text-slate-700 outline-none cursor-pointer" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+                                    </div>
+                                    <button onClick={() => setIsHowToOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold"><Icon name="HelpCircle" /> How To Use</button>
+                                    <button onClick={resetSession} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold"><Icon name="RotateCcw" /> Reset</button>
+                                    <label className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-all shadow-md shadow-blue-100 font-black">
+                                        <Icon name="Upload" /> {baselineData ? "Update Progress" : "Upload Baseline"}
+                                        <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                    </label>
                                 </div>
-                                <button onClick={() => setIsHowToOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold"><Icon name="HelpCircle" /> How To Use</button>
-                                <button onClick={resetSession} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold"><Icon name="RotateCcw" /> Reset</button>
-                                <label className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-all shadow-md shadow-blue-100 font-black">
-                                    <Icon name="Upload" /> {baselineData ? "Update Progress" : "Upload Baseline"}
-                                    <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-                                </label>
+                                <QuickLinks />
                             </div>
                         </div>
 
