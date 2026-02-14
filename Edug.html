@@ -7,6 +7,15 @@ import {
   Search, Calendar 
 } from 'lucide-react';
 
+/**
+ * GITHUB PAGES COMPATIBILITY NOTE:
+ * This application is designed to be self-contained. 
+ * To deploy to GitHub Pages:
+ * 1. Ensure all logic remains in a single file if using a simple build script.
+ * 2. All data is persisted via localStorage, so no backend is required.
+ * 3. Paths are relative to ensure the site works regardless of the repository subfolder.
+ */
+
 const DEFAULT_LINKS = [
   { id: '1', name: 'Group Progress', url: 'https://r06.core.learn.edgenuity.com/Educator/TandR/GroupProgress.aspx', icon: 'Users' },
   { id: '2', name: 'Attendance Log', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/AttendanceLog.aspx', icon: 'ClipboardList' },
@@ -41,13 +50,12 @@ const QuickLinks = ({ className = "" }) => {
   };
 
   const removeLink = (id) => setLinks(links.filter(l => l.id !== id));
-  const resetToDefault = () => { if (window.confirm("Reset all shortcuts?")) setLinks(DEFAULT_LINKS); };
-
+  
   return (
     <div className={`relative ${className}`}>
       <div className="flex items-center justify-between mb-2 px-1">
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hotlinks</span>
-        <button onClick={() => setIsEditing(!isEditing)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+        <button onClick={() => setIsEditing(!isEditing)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800 transition-colors">
           {isEditing ? <Check size={12} /> : <Settings size={12} />}
           {isEditing ? "Done" : "Manage"}
         </button>
@@ -55,11 +63,11 @@ const QuickLinks = ({ className = "" }) => {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         {links.map(link => (
           <div key={link.id} className="relative group">
-            <a href={link.url} target="_blank" className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm truncate">
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm truncate">
               <span className="truncate">{link.name}</span>
             </a>
             {isEditing && (
-              <button onClick={() => removeLink(link.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md">
+              <button onClick={() => removeLink(link.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition-colors">
                 <X size={10} />
               </button>
             )}
@@ -67,11 +75,11 @@ const QuickLinks = ({ className = "" }) => {
         ))}
       </div>
       {isEditing && (
-        <form onSubmit={addLink} className="mt-3 p-3 bg-slate-100 rounded-xl border border-slate-200">
+        <form onSubmit={addLink} className="mt-3 p-3 bg-slate-100 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex gap-2">
-            <input type="text" placeholder="Name" className="flex-1 text-xs p-2 rounded border" value={newLink.name} onChange={e => setNewLink({...newLink, name: e.target.value})} />
-            <input type="text" placeholder="URL" className="flex-1 text-xs p-2 rounded border" value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} />
-            <button type="submit" className="bg-blue-600 text-white p-2 rounded"><Plus size={14} /></button>
+            <input type="text" placeholder="Name" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.name} onChange={e => setNewLink({...newLink, name: e.target.value})} />
+            <input type="text" placeholder="URL" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} />
+            <button type="submit" className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors"><Plus size={14} /></button>
           </div>
         </form>
       )}
@@ -80,18 +88,16 @@ const QuickLinks = ({ className = "" }) => {
 };
 
 const App = () => {
-  // Persistence Loading
+  // Persistence Loading from LocalStorage (Static Site Friendly)
   const [baselineData, setBaselineData] = useState(() => objToMap(JSON.parse(localStorage.getItem('edu_baseline'))));
   const [currentData, setCurrentData] = useState(() => objToMap(JSON.parse(localStorage.getItem('edu_current'))));
   const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('edu_last_updated'));
   const [searchTerm, setSearchTerm] = useState('');
-  const [showLogin, setShowLogin] = useState(true);
-  const [isHowToOpen, setIsHowToOpen] = useState(false);
   const [targetDate, setTargetDate] = useState(() => {
     return localStorage.getItem('edu_target_date') || `${new Date().getFullYear()}-05-28`;
   });
 
-  // Persistence Saving
+  // Persistence Saving to LocalStorage
   useEffect(() => {
     localStorage.setItem('edu_baseline', JSON.stringify(mapToObj(baselineData)));
     localStorage.setItem('edu_current', JSON.stringify(mapToObj(currentData)));
@@ -127,8 +133,7 @@ const App = () => {
         setBaselineData(dataMap);
         setCurrentData(dataMap);
       } else {
-        // We drop the new one on top, making current the baseline for comparisons if user desires
-        // but typically we keep the original morning baseline for "Net Daily Change"
+        // Drop new data on top: comparisons are always against the persistent baseline
         setCurrentData(dataMap);
       }
       setLastUpdated(new Date().toLocaleTimeString());
@@ -241,7 +246,7 @@ const App = () => {
         </div>
 
         {currentData && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
               <div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider">Enrollments</div><div className="text-3xl font-bold text-slate-800">{currentData.size}</div></div>
               <Users size={40} className="text-blue-100" />
@@ -268,7 +273,7 @@ const App = () => {
                 <Upload size={40} className="text-slate-300" />
               </div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">No Data Loaded</h3>
-              <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto">Upload the "Group Progress" CSV from Edgenuity to begin tracking student gains.</p>
+              <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto">Upload the "Group Progress" CSV from Edgenuity to begin tracking student gains. All data stays on your device.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -292,11 +297,21 @@ const App = () => {
                           <div className="font-bold text-slate-800 leading-tight">{student['Last Name']}, {student['First Name']}</div>
                           <div className="text-[11px] text-slate-500 truncate max-w-xs">{student['Course Name']}</div>
                         </td>
-                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Percent Complete (Count)" /></td>
-                        <td className="px-4 py-4 text-center border-x border-slate-50 bg-blue-50/10"><DailyRequirementCell studentKey={key} /></td>
-                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Relative Grade" /></td>
-                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Overall Grade" /></td>
-                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Actual Grade" /></td>
+                        <td className="px-4 py-4 text-center">
+                          <ComparisonCell studentKey={key} field="Percent Complete (Count)" />
+                        </td>
+                        <td className="px-4 py-4 text-center border-x border-slate-50 bg-blue-50/10">
+                          <DailyRequirementCell studentKey={key} />
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <ComparisonCell studentKey={key} field="Relative Grade" />
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <ComparisonCell studentKey={key} field="Overall Grade" />
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <ComparisonCell studentKey={key} field="Actual Grade" />
+                        </td>
                       </tr>
                     );
                   })}
