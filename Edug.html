@@ -1,328 +1,385 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Users, ClipboardList, Clock, Layout, GraduationCap, 
-  Settings, Check, ExternalLink, Link, X, RotateCcw, 
-  Plus, Info, Target, FileSpreadsheet, Upload, 
-  ArrowRight, TrendingUp, TrendingDown, BookOpen, 
-  Search, Calendar 
-} from 'lucide-react';
-
-/**
- * GITHUB PAGES COMPATIBILITY NOTE:
- * This application is designed to be self-contained. 
- * To deploy to GitHub Pages:
- * 1. Ensure all logic remains in a single file if using a simple build script.
- * 2. All data is persisted via localStorage, so no backend is required.
- * 3. Paths are relative to ensure the site works regardless of the repository subfolder.
- */
-
-const DEFAULT_LINKS = [
-  { id: '1', name: 'Group Progress', url: 'https://r06.core.learn.edgenuity.com/Educator/TandR/GroupProgress.aspx', icon: 'Users' },
-  { id: '2', name: 'Attendance Log', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/AttendanceLog.aspx', icon: 'ClipboardList' },
-  { id: '3', name: 'EX Attendance', url: 'https://educator.ex.edgenuity.com/attendance-log', icon: 'Clock' },
-  { id: '4', name: 'Dashboard', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/Dashboard.aspx', icon: 'Layout' },
-  { id: '5', name: 'OpenSis', url: 'https://rssp.opensis.com/', icon: 'GraduationCap' }
-];
-
-// Helper to serialize/deserialize Map for LocalStorage
-const mapToObj = (map) => map ? Object.fromEntries(map) : null;
-const objToMap = (obj) => obj ? new Map(Object.entries(obj)) : null;
-
-const QuickLinks = ({ className = "" }) => {
-  const [links, setLinks] = useState(() => {
-    const saved = localStorage.getItem('edgenuity_quick_links');
-    return saved ? JSON.parse(saved) : DEFAULT_LINKS;
-  });
-  const [isEditing, setIsEditing] = useState(false);
-  const [newLink, setNewLink] = useState({ name: '', url: '' });
-
-  useEffect(() => {
-    localStorage.setItem('edgenuity_quick_links', JSON.stringify(links));
-  }, [links]);
-
-  const addLink = (e) => {
-    e.preventDefault();
-    if (!newLink.name || !newLink.url) return;
-    let url = newLink.url;
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    setLinks([...links, { ...newLink, url, id: Date.now().toString(), icon: 'Link' }]);
-    setNewLink({ name: '', url: '' });
-  };
-
-  const removeLink = (id) => setLinks(links.filter(l => l.id !== id));
-  
-  return (
-    <div className={`relative ${className}`}>
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hotlinks</span>
-        <button onClick={() => setIsEditing(!isEditing)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800 transition-colors">
-          {isEditing ? <Check size={12} /> : <Settings size={12} />}
-          {isEditing ? "Done" : "Manage"}
-        </button>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-        {links.map(link => (
-          <div key={link.id} className="relative group">
-            <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm truncate">
-              <span className="truncate">{link.name}</span>
-            </a>
-            {isEditing && (
-              <button onClick={() => removeLink(link.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition-colors">
-                <X size={10} />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {isEditing && (
-        <form onSubmit={addLink} className="mt-3 p-3 bg-slate-100 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex gap-2">
-            <input type="text" placeholder="Name" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.name} onChange={e => setNewLink({...newLink, name: e.target.value})} />
-            <input type="text" placeholder="URL" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} />
-            <button type="submit" className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors"><Plus size={14} /></button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-};
-
-const App = () => {
-  // Persistence Loading from LocalStorage (Static Site Friendly)
-  const [baselineData, setBaselineData] = useState(() => objToMap(JSON.parse(localStorage.getItem('edu_baseline'))));
-  const [currentData, setCurrentData] = useState(() => objToMap(JSON.parse(localStorage.getItem('edu_current'))));
-  const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('edu_last_updated'));
-  const [searchTerm, setSearchTerm] = useState('');
-  const [targetDate, setTargetDate] = useState(() => {
-    return localStorage.getItem('edu_target_date') || `${new Date().getFullYear()}-05-28`;
-  });
-
-  // Persistence Saving to LocalStorage
-  useEffect(() => {
-    localStorage.setItem('edu_baseline', JSON.stringify(mapToObj(baselineData)));
-    localStorage.setItem('edu_current', JSON.stringify(mapToObj(currentData)));
-    localStorage.setItem('edu_last_updated', lastUpdated || '');
-    localStorage.setItem('edu_target_date', targetDate);
-  }, [baselineData, currentData, lastUpdated, targetDate]);
-
-  const parseCSV = (text) => {
-    const lines = text.split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    return lines.slice(1).filter(line => line.trim()).map(line => {
-      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-      const obj = {};
-      headers.forEach((header, i) => { obj[header] = values[i] || "0"; });
-      return obj;
-    });
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const parsed = parseCSV(e.target.result);
-      const dataMap = new Map();
-      parsed.forEach(student => {
-        const key = `${student['User ID']}-${student['Course Name']}`;
-        dataMap.set(key, student);
-      });
-
-      if (!baselineData) {
-        setBaselineData(dataMap);
-        setCurrentData(dataMap);
-      } else {
-        // Drop new data on top: comparisons are always against the persistent baseline
-        setCurrentData(dataMap);
-      }
-      setLastUpdated(new Date().toLocaleTimeString());
-    };
-    reader.readAsText(file);
-    event.target.value = ''; 
-  };
-
-  const resetSession = () => {
-    if (window.confirm("Clear saved baseline and current data? This starts a fresh session.")) {
-      setBaselineData(null);
-      setCurrentData(null);
-      setLastUpdated(null);
-      localStorage.removeItem('edu_baseline');
-      localStorage.removeItem('edu_current');
-      localStorage.removeItem('edu_last_updated');
-    }
-  };
-
-  const remainingWeekdays = useMemo(() => {
-    const start = new Date();
-    const end = new Date(targetDate);
-    if (end < start) return 0;
-    let count = 0;
-    let cur = new Date(start.getTime());
-    while (cur <= end) {
-      const dayOfWeek = cur.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return count;
-  }, [targetDate]);
-
-  const ComparisonCell = ({ studentKey, field }) => {
-    if (!baselineData || !currentData) return <span>-</span>;
-    const baseRaw = baselineData.get(studentKey)?.[field] || "0";
-    const currRaw = currentData.get(studentKey)?.[field] || "0";
-    const baseVal = parseFloat(baseRaw) || 0;
-    const currVal = parseFloat(currRaw) || 0;
-    const diff = currVal - baseVal;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Monitor</title>
     
-    if (diff === 0) return <span className="text-slate-600 font-medium">{currRaw}%</span>;
-    const isPositive = diff > 0;
-    return (
-      <div className={`flex flex-col items-center p-1 rounded border ${isPositive ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"} transition-all shadow-sm`}>
-        <div className="flex items-center gap-1 text-[9px] opacity-70 uppercase font-bold">
-          <span>{baseRaw}%</span> <ArrowRight size={8} /> <span>{currRaw}%</span>
-        </div>
-        <div className="flex items-center gap-1 text-xs font-black">
-          {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {isPositive ? "+" : ""}{diff.toFixed(1)}%
-        </div>
-      </div>
-    );
-  };
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .animate-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
 
-  const DailyRequirementCell = ({ studentKey }) => {
-    if (!currentData) return <span>-</span>;
-    const currVal = parseFloat(currentData.get(studentKey)?.['Percent Complete (Count)'] || "0") || 0;
-    const remaining = 100 - currVal;
-    if (remaining <= 0) return <span className="text-green-600 font-bold italic">Done</span>;
-    if (remainingWeekdays <= 0) return <span className="text-red-500 font-bold text-[10px]">Overdue</span>;
-    const reqDaily = (remaining / remainingWeekdays).toFixed(2);
-    return (
-      <div className="flex flex-col items-center">
-        <span className="text-sm font-bold text-slate-700">{reqDaily}%</span>
-        <span className="text-[9px] text-slate-400 font-medium leading-none">per day</span>
-      </div>
-    );
-  };
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
 
-  const studentList = useMemo(() => {
-    if (!currentData) return [];
-    return Array.from(currentData.values()).filter(s => {
-      const full = `${s['First Name']} ${s['Last Name']} ${s['Course Name']}`.toLowerCase();
-      return full.includes(searchTerm.toLowerCase());
-    });
-  }, [currentData, searchTerm]);
+        const Icon = ({ d, size = 18, className = "" }) => (
+            <svg 
+                width={size} height={size} 
+                viewBox="0 0 24 24" fill="none" 
+                stroke="currentColor" strokeWidth="2.5" 
+                strokeLinecap="round" strokeLinejoin="round" 
+                className={className}
+            >
+                <path d={d} />
+            </svg>
+        );
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-              <BookOpen className="text-blue-600" />
-              Progress Monitor
-            </h1>
-            <p className="text-slate-500 mt-1 font-medium">
-              {lastUpdated ? `Last Sync: ${lastUpdated} (Saved Locally)` : "Upload morning CSV to start tracking"}
-            </p>
-          </div>
-          
-          <div className="flex flex-col gap-4 w-full lg:max-w-xl">
-            <div className="flex flex-wrap items-center gap-3 justify-end">
-              <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Due Date:</span>
-                <input type="date" className="text-xs font-semibold text-slate-700 outline-none" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-              </div>
-              <button onClick={resetSession} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold">
-                <RotateCcw size={16} /> Reset Session
-              </button>
-              <label className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-all shadow-md font-black">
-                <Upload size={18} /> {baselineData ? "Sync Progress" : "Upload Baseline"}
-                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-              </label>
-            </div>
-            <QuickLinks />
-          </div>
-        </div>
+        const Icons = {
+            Users: (p) => <Icon d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75" {...p} />,
+            Upload: (p) => <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M17 8l-5-5-5 5 M12 3v12" {...p} />,
+            RotateCcw: (p) => <Icon d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5" {...p} />,
+            BookOpen: (p) => <Icon d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" {...p} />,
+            Search: (p) => <Icon d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35" {...p} />,
+            Calendar: (p) => <Icon d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z M16 2v4 M8 2v4 M3 10h18" {...p} />,
+            TrendingUp: (p) => <Icon d="m22 7-8.5 8.5L9 11l-7 7 M16 7h6v6" {...p} />,
+            TrendingDown: (p) => <Icon d="m22 17-8.5-8.5L9 13l-7-7 M16 17h6v-6" {...p} />,
+            ArrowRight: (p) => <Icon d="M5 12h14 M12 5l7 7-7 7" {...p} />,
+            Settings: (p) => <Icon d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" {...p} />,
+            Check: (p) => <Icon d="M20 6L9 17l-5-5" {...p} />,
+            X: (p) => <Icon d="M18 6L6 18 M6 6l12 12" {...p} />,
+            Plus: (p) => <Icon d="M12 5v14 M5 12h14" {...p} />,
+            Clock: (p) => <Icon d="M12 6v6l4 2 M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" {...p} />
+        };
 
-        {currentData && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-              <div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider">Enrollments</div><div className="text-3xl font-bold text-slate-800">{currentData.size}</div></div>
-              <Users size={40} className="text-blue-100" />
-            </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-              <div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider">Days Remaining</div><div className="text-3xl font-bold text-slate-800">{remainingWeekdays}</div></div>
-              <Calendar size={40} className="text-blue-100" />
-            </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm col-span-2">
-              <div className="flex items-center gap-4 h-full">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Filter by name or course..." className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        // --- Relative Time Component ---
+        const RelativeTime = ({ timestamp }) => {
+            const [timeAgo, setTimeAgo] = useState("");
+
+            useEffect(() => {
+                if (!timestamp) return;
+                
+                const update = () => {
+                    const diff = (Date.now() - new Date(timestamp).getTime()) / 1000;
+                    if (diff < 15) setTimeAgo("Just now");
+                    else if (diff < 60) setTimeAgo(`${Math.floor(diff)}s ago`);
+                    else if (diff < 3600) setTimeAgo(`${Math.floor(diff / 60)}m ago`);
+                    else setTimeAgo(`${Math.floor(diff / 3600)}h ago`);
+                };
+
+                update();
+                const interval = setInterval(update, 1000);
+                return () => clearInterval(interval);
+            }, [timestamp]);
+
+            if (!timestamp) return null;
+            return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Updated {timeAgo}</span>;
+        };
+
+        const DEFAULT_LINKS = [
+            { id: '1', name: 'Group Progress', url: 'https://r06.core.learn.edgenuity.com/Educator/TandR/GroupProgress.aspx' },
+            { id: '2', name: 'Attendance Log', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/AttendanceLog.aspx' },
+            { id: '3', name: 'EX Attendance', url: 'https://educator.ex.edgenuity.com/attendance-log' },
+            { id: '4', name: 'Dashboard', url: 'https://r06.core.learn.edgenuity.com/Educator/StudentTools/Dashboard.aspx' },
+            { id: '5', name: 'OpenSis', url: 'https://rssp.opensis.com/' }
+        ];
+
+        const QuickLinks = ({ className = "" }) => {
+            const [links, setLinks] = useState(() => {
+                const saved = localStorage.getItem('edgenuity_quick_links');
+                return saved ? JSON.parse(saved) : DEFAULT_LINKS;
+            });
+            const [isEditing, setIsEditing] = useState(false);
+            const [newLink, setNewLink] = useState({ name: '', url: '' });
+
+            useEffect(() => {
+                localStorage.setItem('edgenuity_quick_links', JSON.stringify(links));
+            }, [links]);
+
+            const addLink = (e) => {
+                e.preventDefault();
+                if (!newLink.name || !newLink.url) return;
+                let url = newLink.url;
+                if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+                setLinks([...links, { ...newLink, url, id: Date.now().toString() }]);
+                setNewLink({ name: '', url: '' });
+            };
+
+            const removeLink = (id) => setLinks(links.filter(l => l.id !== id));
+            
+            return (
+                <div className={`relative ${className}`}>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hotlinks</span>
+                        <button onClick={() => setIsEditing(!isEditing)} className="text-[10px] font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800 transition-colors">
+                            {isEditing ? <Icons.Check size={12} /> : <Icons.Settings size={12} />}
+                            {isEditing ? "Done" : "Manage"}
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                        {links.map(link => (
+                            <div key={link.id} className="relative group">
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm truncate">
+                                    <span className="truncate">{link.name}</span>
+                                </a>
+                                {isEditing && (
+                                    <button onClick={() => removeLink(link.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition-colors">
+                                        <Icons.X size={10} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {isEditing && (
+                        <form onSubmit={addLink} className="mt-3 p-3 bg-slate-100 rounded-xl border border-slate-200 animate-in">
+                            <div className="flex gap-2">
+                                <input type="text" placeholder="Name" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.name} onChange={e => setNewLink({...newLink, name: e.target.value})} />
+                                <input type="text" placeholder="URL" className="flex-1 text-xs p-2 rounded border focus:ring-2 focus:ring-blue-500 outline-none" value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} />
+                                <button type="submit" className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors"><Icons.Plus size={14} /></button>
+                            </div>
+                        </form>
+                    )}
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+            );
+        };
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          {!currentData ? (
-            <div className="py-24 text-center">
-              <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-dashed border-slate-200">
-                <Upload size={40} className="text-slate-300" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">No Data Loaded</h3>
-              <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto">Upload the "Group Progress" CSV from Edgenuity to begin tracking student gains. All data stays on your device.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student / Course</th>
-                    <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 tracking-widest">Progress Count</th>
-                    <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 border-x border-slate-100 bg-blue-50/30 tracking-widest">Required Daily</th>
-                    <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 tracking-widest">Relative Grade</th>
-                    <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 tracking-widest">Overall Grade</th>
-                    <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 tracking-widest">Actual Grade</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {studentList.map((student) => {
-                    const key = `${student['User ID']}-${student['Course Name']}`;
-                    return (
-                      <tr key={key} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-800 leading-tight">{student['Last Name']}, {student['First Name']}</div>
-                          <div className="text-[11px] text-slate-500 truncate max-w-xs">{student['Course Name']}</div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <ComparisonCell studentKey={key} field="Percent Complete (Count)" />
-                        </td>
-                        <td className="px-4 py-4 text-center border-x border-slate-50 bg-blue-50/10">
-                          <DailyRequirementCell studentKey={key} />
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <ComparisonCell studentKey={key} field="Relative Grade" />
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <ComparisonCell studentKey={key} field="Overall Grade" />
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <ComparisonCell studentKey={key} field="Actual Grade" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+        const App = () => {
+            const [baselineData, setBaselineData] = useState(() => {
+                const saved = localStorage.getItem('edu_baseline');
+                return saved ? new Map(Object.entries(JSON.parse(saved))) : null;
+            });
+            const [currentData, setCurrentData] = useState(() => {
+                const saved = localStorage.getItem('edu_current');
+                return saved ? new Map(Object.entries(JSON.parse(saved))) : null;
+            });
+            const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('edu_last_updated'));
+            const [searchTerm, setSearchTerm] = useState('');
+            const [targetDate, setTargetDate] = useState(() => {
+                return localStorage.getItem('edu_target_date') || `${new Date().getFullYear()}-05-28`;
+            });
 
-export default App;
+            useEffect(() => {
+                if (baselineData) localStorage.setItem('edu_baseline', JSON.stringify(Object.fromEntries(baselineData)));
+                if (currentData) localStorage.setItem('edu_current', JSON.stringify(Object.fromEntries(currentData)));
+                localStorage.setItem('edu_last_updated', lastUpdated || '');
+                localStorage.setItem('edu_target_date', targetDate);
+            }, [baselineData, currentData, lastUpdated, targetDate]);
+
+            const parseCSV = (text) => {
+                const lines = text.split(/\r?\n/);
+                if (lines.length < 2) return [];
+                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                return lines.slice(1).filter(line => line.trim()).map(line => {
+                    const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+                    const obj = {};
+                    headers.forEach((header, i) => { obj[header] = values[i] || "0"; });
+                    return obj;
+                });
+            };
+
+            const handleFileUpload = (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const parsed = parseCSV(e.target.result);
+                    const dataMap = new Map();
+                    parsed.forEach(student => {
+                        const key = `${student['User ID']}-${student['Course Name']}`;
+                        dataMap.set(key, student);
+                    });
+                    if (!baselineData) {
+                        setBaselineData(dataMap);
+                        setCurrentData(dataMap);
+                    } else {
+                        setCurrentData(dataMap);
+                    }
+                    setLastUpdated(new Date().toISOString());
+                };
+                reader.readAsText(file);
+                event.target.value = ''; 
+            };
+
+            const resetSession = () => {
+                if (confirm("Clear saved data?")) {
+                    localStorage.clear();
+                    window.location.reload();
+                }
+            };
+
+            const remainingWeekdays = useMemo(() => {
+                const start = new Date();
+                const end = new Date(targetDate);
+                if (end < start) return 0;
+                let count = 0;
+                let cur = new Date(start.getTime());
+                while (cur <= end) {
+                    if (cur.getDay() !== 0 && cur.getDay() !== 6) count++;
+                    cur.setDate(cur.getDate() + 1);
+                }
+                return count;
+            }, [targetDate]);
+
+            const ComparisonCell = ({ studentKey, field }) => {
+                if (!baselineData || !currentData) return <span>-</span>;
+                const baseRaw = baselineData.get(studentKey)?.[field] || "0";
+                const currRaw = currentData.get(studentKey)?.[field] || "0";
+                const baseVal = parseFloat(baseRaw) || 0;
+                const currVal = parseFloat(currRaw) || 0;
+                const diff = currVal - baseVal;
+                
+                if (diff === 0) return <span className="text-slate-600 font-medium">{currRaw}%</span>;
+                const isPositive = diff > 0;
+                return (
+                    <div className={`flex flex-col items-center p-1.5 rounded border ${isPositive ? "bg-green-100/60 text-green-700 border-green-200" : "bg-red-100/60 text-red-700 border-red-200"}`}>
+                        <div className="flex items-center gap-1 text-[9px] opacity-70 font-bold">
+                            <span>{baseRaw}%</span> <Icons.ArrowRight size={8} /> <span>{currRaw}%</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs font-black">
+                            {isPositive ? <Icons.TrendingUp size={12} /> : <Icons.TrendingDown size={12} />}
+                            {isPositive ? "+" : ""}{diff.toFixed(1)}%
+                        </div>
+                    </div>
+                );
+            };
+
+            const DailyRequirementCell = ({ studentKey }) => {
+                if (!currentData) return <span>-</span>;
+                const currVal = parseFloat(currentData.get(studentKey)?.['Percent Complete (Count)'] || "0") || 0;
+                const remaining = 100 - currVal;
+                if (remaining <= 0) return <span className="text-green-600 font-bold italic text-xs">Complete</span>;
+                if (remainingWeekdays <= 0) return <span className="text-red-500 font-bold text-[10px]">Overdue</span>;
+                const reqDaily = (remaining / remainingWeekdays).toFixed(2);
+                return (
+                    <div className="flex flex-col items-center">
+                        <span className="text-sm font-bold text-slate-700">{reqDaily}%</span>
+                        <span className="text-[9px] text-slate-400 font-medium leading-none">per day</span>
+                    </div>
+                );
+            };
+
+            const studentList = useMemo(() => {
+                if (!currentData) return [];
+                return Array.from(currentData.values()).filter(s => {
+                    const full = `${s['First Name']} ${s['Last Name']} ${s['Course Name']}`.toLowerCase();
+                    return full.includes(searchTerm.toLowerCase());
+                });
+            }, [currentData, searchTerm]);
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
+                            <div>
+                                <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
+                                    <Icons.BookOpen className="text-blue-600" size={32} /> Progress Monitor
+                                </h1>
+                                <p className="text-slate-500 font-medium mt-1">
+                                    Edgenuity student performance tracking
+                                </p>
+                            </div>
+                            
+                            <div className="flex flex-col gap-4 w-full lg:max-w-xl">
+                                <div className="flex flex-wrap items-center gap-3 justify-end">
+                                    <div className="bg-white border rounded-lg px-2 py-1 flex items-center gap-2 shadow-sm">
+                                        <Icons.Calendar size={14} className="text-slate-400" />
+                                        <input type="date" className="text-xs font-bold text-slate-700 outline-none" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+                                    </div>
+                                    <button onClick={resetSession} className="p-2 bg-white border rounded-lg hover:bg-slate-50 shadow-sm text-slate-500">
+                                        <Icons.RotateCcw size={18} />
+                                    </button>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <label className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer font-black shadow-md transition-all active:scale-95">
+                                            <Icons.Upload size={18} /> {baselineData ? "Sync Progress" : "Upload Baseline"}
+                                            <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                        </label>
+                                        <RelativeTime timestamp={lastUpdated} />
+                                    </div>
+                                </div>
+                                <QuickLinks />
+                            </div>
+                        </header>
+
+                        {currentData && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-in">
+                                <div className="bg-white p-6 rounded-xl border flex justify-between items-center shadow-sm">
+                                    <div>
+                                        <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Enrollments</div>
+                                        <div className="text-3xl font-bold text-slate-800">{currentData.size}</div>
+                                    </div>
+                                    <Icons.Users size={40} className="text-blue-50" />
+                                </div>
+                                <div className="bg-white p-6 rounded-xl border flex justify-between items-center shadow-sm">
+                                    <div>
+                                        <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Days Remaining</div>
+                                        <div className="text-3xl font-bold text-slate-800">{remainingWeekdays}</div>
+                                    </div>
+                                    <Icons.Clock size={40} className="text-blue-50" />
+                                </div>
+                                <div className="bg-white p-6 rounded-xl border col-span-2 shadow-sm relative">
+                                    <Icons.Search className="absolute left-10 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input type="text" placeholder="Search student or course..." className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-lg outline-none border border-transparent focus:border-blue-200 focus:ring-2 focus:ring-blue-100 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                </div>
+                            </div>
+                        )}
+
+                        <main className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                            {!currentData ? (
+                                <div className="py-24 text-center">
+                                    <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
+                                        <Icons.Upload size={32} className="text-slate-300" />
+                                    </div>
+                                    <p className="text-slate-400 font-bold">Waiting for Edgenuity CSV export...</p>
+                                    <p className="text-xs text-slate-300 mt-1">Upload "Group Progress" from Educator tools</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="bg-slate-50/80 border-b">
+                                            <tr>
+                                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student / Course</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 tracking-widest">Progress</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-32 border-x border-slate-100 bg-blue-50/30 tracking-widest">Req. Daily</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-28 tracking-widest">Relative</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-28 tracking-widest">Overall</th>
+                                                <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase text-center w-28 tracking-widest">Actual</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {studentList.map(s => {
+                                                const key = `${s['User ID']}-${s['Course Name']}`;
+                                                return (
+                                                    <tr key={key} className="hover:bg-slate-50/50 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <div className="font-bold text-slate-800 leading-tight">{s['Last Name']}, {s['First Name']}</div>
+                                                            <div className="text-[10px] text-slate-400 font-medium truncate max-w-xs uppercase mt-0.5 tracking-tight">{s['Course Name']}</div>
+                                                        </td>
+                                                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Percent Complete (Count)" /></td>
+                                                        <td className="px-4 py-4 text-center border-x border-slate-50 bg-blue-50/10"><DailyRequirementCell studentKey={key} /></td>
+                                                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Relative Grade" /></td>
+                                                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Overall Grade" /></td>
+                                                        <td className="px-4 py-4 text-center"><ComparisonCell studentKey={key} field="Actual Grade" /></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
