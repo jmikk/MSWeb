@@ -6,69 +6,91 @@
     <title>MSWeb Tool Suite</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f9; padding: 20px; text-align: center; }
-        h1 { color: #333; }
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
+        h1 { font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.5rem; }
         #tool-container { 
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; 
-            max-width: 1000px; margin: 40px auto; min-height: 100px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem; max-width: 1000px; margin: 2rem auto; 
         }
         .tool-button {
-            background: white; border: 1px solid #ddd; padding: 20px 30px;
-            border-radius: 8px; cursor: grab; text-decoration: none;
-            color: #007bff; font-weight: bold; transition: transform 0.2s, box-shadow 0.2s;
-            display: flex; align-items: center; justify-content: center;
-            min-width: 150px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background: white; border: 1px solid #e2e8f0; padding: 1.5rem;
+            border-radius: 12px; cursor: grab; text-decoration: none;
+            color: var(--primary); font-weight: 600; transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: block;
         }
-        .tool-button:active { cursor: grabbing; }
-        .tool-button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.15); }
-        .ghost { opacity: 0.4; background: #c8ebfb; }
+        .tool-button:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .ghost { opacity: 0.2; border: 2px dashed var(--primary); }
     </style>
 </head>
 <body>
 
     <h1>MSWeb Suite</h1>
-    <p>Drag to rearrange your tools</p>
+    <p>Click to launch, drag to reorder.</p>
 
     <div id="tool-container">
-        <p id="loading">Scanning repository...</p>
+        <p id="loading">Scanning suite...</p>
     </div>
 
     <script>
-        const REPO_URL = 'https://api.github.com/repos/jmikk/MSWeb/contents/';
+        const USER = 'jmikk';
+        const REPO = 'MSWeb';
+        const API_URL = `https://api.github.com/repos/${USER}/${REPO}/contents/`;
+        const BASE_PAGES_URL = `https://${USER}.github.io/${REPO}/`;
+        
         const container = document.getElementById('tool-container');
 
-        async function loadTools() {
+        async function init() {
             try {
-                const response = await fetch(REPO_URL);
-                const data = await response.json();
-                
-                document.getElementById('loading').remove();
+                const response = await fetch(API_URL);
+                const files = await response.json();
+                const savedOrder = JSON.parse(localStorage.getItem('msweb-order')) || [];
 
-                data.forEach(item => {
-                    // Filter: Only include HTML files or directories, skip hidden/config files
-                    if (item.name !== 'index.html' && (item.type === 'dir' || item.name.endsWith('.html'))) {
-                        const btn = document.createElement('a');
-                        btn.className = 'tool-button';
-                        btn.href = item.html_url;
-                        // Clean up name (e.g., "my_tool.html" -> "My Tool")
-                        btn.innerText = item.name.replace('.html', '').replace(/[-_]/g, ' ');
-                        container.appendChild(btn);
+                // 1. Filter and Map the data
+                let tools = files
+                    .filter(f => f.name !== 'index.html' && (f.type === 'dir' || f.name.endsWith('.html')))
+                    .map(f => ({
+                        id: f.name,
+                        name: f.name.replace('.html', '').replace(/[-_]/g, ' '),
+                        url: BASE_PAGES_URL + f.name
+                    }));
+
+                // 2. Sort based on saved order
+                if (savedOrder.length) {
+                    tools.sort((a, b) => {
+                        let indexA = savedOrder.indexOf(a.id);
+                        let indexB = savedOrder.indexOf(b.id);
+                        return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+                    });
+                }
+
+                // 3. Render
+                container.innerHTML = '';
+                tools.forEach(tool => {
+                    const a = document.createElement('a');
+                    a.className = 'tool-button';
+                    a.href = tool.url;
+                    a.dataset.id = tool.id;
+                    a.innerText = tool.name;
+                    container.appendChild(a);
+                });
+
+                // 4. Enable Drag & Drop with Persistence
+                new Sortable(container, {
+                    animation: 200,
+                    ghostClass: 'ghost',
+                    onEnd: () => {
+                        const newOrder = Array.from(container.children).map(el => el.dataset.id);
+                        localStorage.setItem('msweb-order', JSON.stringify(newOrder));
                     }
                 });
 
-                // Initialize Sortable
-                new Sortable(container, {
-                    animation: 150,
-                    ghostClass: 'ghost'
-                });
-
-            } catch (error) {
-                console.error("Error fetching repo:", error);
-                container.innerHTML = "<p>Error loading tools. Check the console for details.</p>";
+            } catch (err) {
+                container.innerHTML = "Failed to load tools. Ensure GitHub Pages is active.";
             }
         }
 
-        loadTools();
+        init();
     </script>
 </body>
 </html>
