@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduMatrix Rubric Tracker</title>
+    <!-- React and ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; margin: 0 !important; }
+            .print-container { padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
+            .page-break-after-always { 
+                page-break-after: always !important; 
+                break-after: page !important;
+                display: block;
+                margin: 0 !important;
+                padding: 20px !important;
+            }
+            table { border: 2px solid black !important; width: 100% !important; }
+            th, td { border: 1px solid black !important; color: black !important; }
+            .rubric-card { 
+                border: 2px solid black !important; 
+                margin-bottom: 0 !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+            }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        
+        const Icon = ({ name, size = 20, className = "" }) => {
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [name, size, className]);
+            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+        };
+
+        const DEFAULT_MATRIX = {
+            Belonging: {
+                4: "Uses encouraging language with peers; models \"safe actions\" without being prompted.",
+                3: "Follows classroom rules and uses polite, positive language with the teacher.",
+                2: "Language is neutral but may lack positivity; needs reminders to stay in assigned seat.",
+                1: "Uses negative language or unsafe actions; disrespectful to the learning environment."
+            },
+            Mastery: {
+                4: "Completes more than the daily % goal; asks high-level clarifying questions about the content.",
+                3: "Meets the daily % goal; completes all Guided Notes thoroughly and accurately.",
+                2: "Behind on daily % goal; notes are sparse or incomplete; \"checking boxes\" rather than learning.",
+                1: "Zero progress made; no notes taken; refuses to engage with the Retake/Relearn plan."
+            },
+            Independence: {
+                4: "Stays on task 100% of the time; manages breaks effectively without teacher intervention.",
+                3: "Requires only 1–2 minor redirections; uses GoGuardian-approved sites only.",
+                2: "Requires frequent redirection via GoGuardian; struggles to restart work after a break.",
+                1: "Actively bypasses filters or ignores redirections; off-task for the majority of the period."
+            },
+            Generosity: {
+                4: "Proactively helps a peer troubleshoot a tech issue or shares helpful note-taking tips.",
+                3: "Contributes to a quiet, focused environment; respects the workspace of others.",
+                2: "Minimal contribution to the classroom culture; occasionally distracts others.",
+                1: "Disruptive to the community; prevents others from working through noise or behavior."
+            }
+        };
+
+        const CATEGORIES = ['Belonging', 'Mastery', 'Independence', 'Generosity'];
+        const CATEGORY_COLORS = {
+            Belonging: '#6366f1',
+            Mastery: '#10b981',
+            Independence: '#f59e0b',
+            Generosity: '#ec4899'
+        };
+        const LEVELS = [4, 3, 2, 1];
+
+        function App() {
+            const [view, setView] = useState('classes');
+            const [currentClassId, setCurrentClassId] = useState(null);
+            const [currentStudentId, setCurrentStudentId] = useState(null);
+            const [isPrintMode, setIsPrintMode] = useState(false);
+            const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+            const [activeTab, setActiveTab] = useState('goals'); 
+            
+            const [classes, setClasses] = useState(JSON.parse(localStorage.getItem('ems_classes') || '[]'));
+            const [students, setStudents] = useState(JSON.parse(localStorage.getItem('ems_students') || '[]'));
+            
+            const [isAddingClass, setIsAddingClass] = useState(false);
+            const [isAddingStudent, setIsAddingStudent] = useState(false);
+            const [newEntryName, setNewEntryName] = useState('');
+
+            useEffect(() => {
+                localStorage.setItem('ems_classes', JSON.stringify(classes));
+            }, [classes]);
+
+            useEffect(() => {
+                localStorage.setItem('ems_students', JSON.stringify(students));
+            }, [students]);
+
+            const addClass = () => {
+                if (!newEntryName.trim()) return;
+                const newClass = { id: Date.now().toString(), name: newEntryName, createdAt: Date.now() };
+                setClasses([...classes, newClass]);
+                setNewEntryName(''); 
+                setIsAddingClass(false);
+            };
+
+            const addStudent = () => {
+                if (!newEntryName.trim()) return;
+                const newStudent = {
+                    id: Date.now().toString(),
+                    classId: currentClassId,
+                    name: newEntryName,
+                    matrixOverrides: {},
+                    currentRatings: { Belonging: null, Mastery: null, Independence: null, Generosity: null },
+                    history: [],
+                    isPresent: true,
+                    lastUpdated: Date.now()
+                };
+                setStudents([...students, newStudent]);
+                setNewEntryName(''); 
+                setIsAddingStudent(false);
+            };
+
+            const logClassScores = () => {
+                const date = new Date().toLocaleDateString();
+                const timestamp = Date.now();
+                
+                setStudents(students.map(s => {
+                    if (s.classId !== currentClassId || !s.isPresent) return s;
+                    const logEntry = {
+                        date,
+                        timestamp,
+                        scores: { ...s.currentRatings }
+                    };
+                    return { ...s, history: [logEntry, ...(s.history || [])].slice(0, 30) };
+                }));
+            };
+
+            const exportStudentCSV = (student) => {
+                const headers = ['Date', ...CATEGORIES];
+                const rows = (student.history || []).map(entry => [
+                    entry.date,
+                    ...CATEGORIES.map(cat => entry.scores?.[cat] ?? 'N/A')
+                ]);
+                
+                const csvContent = [headers, ...rows].map(r => r.join(',')).join('\n');
+                downloadCSV(csvContent, `${student.name.replace(/\s+/g, '_')}_Progress.csv`);
+            };
+
+            const exportAllStudentsCSV = () => {
+                const activeClass = classes.find(c => c.id === currentClassId);
+                const classStudents = students.filter(s => s.classId === currentClassId);
+                
+                const headers = ['Student Name', 'Date', ...CATEGORIES];
+                const allRows = [];
+
+                classStudents.forEach(student => {
+                    const history = student.history || [];
+                    if (history.length === 0) {
+                        // Include student even if no history, with empty fields
+                        allRows.push([student.name, 'No History', ...CATEGORIES.map(() => 'N/A')]);
+                    } else {
+                        history.forEach(entry => {
+                            allRows.push([
+                                student.name,
+                                entry.date,
+                                ...CATEGORIES.map(cat => entry.scores?.[cat] ?? 'N/A')
+                            ]);
+                        });
+                    }
+                });
+
+                const csvContent = [headers, ...allRows].map(r => r.join(',')).join('\n');
+                const filename = `${activeClass?.name.replace(/\s+/g, '_') || 'Class'}_Full_Progress.csv`;
+                downloadCSV(csvContent, filename);
+            };
+
+            const downloadCSV = (content, filename) => {
+                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const toggleAttendance = (studentId) => {
+                setStudents(students.map(s => 
+                    s.id === studentId ? { ...s, isPresent: !s.isPresent } : s
+                ));
+            };
+
+            const deleteHistoryEntry = (studentId, timestamp) => {
+                setStudents(students.map(s => 
+                    s.id === studentId ? { ...s, history: s.history.filter(h => h.timestamp !== timestamp) } : s
+                ));
+            };
+
+            const deleteStudent = (id) => {
+                setStudents(students.filter(s => s.id !== id));
+                setDeleteConfirmation(null);
+            };
+
+            const deleteClass = (id) => {
+                setClasses(classes.filter(c => c.id !== id));
+                setStudents(students.filter(s => s.classId !== id));
+                setDeleteConfirmation(null);
+            };
+
+            const updateRating = (studentId, category, level) => {
+                setStudents(students.map(s => {
+                    if (s.id === studentId) {
+                        const newRating = s.currentRatings?.[category] === level ? null : level;
+                        return { ...s, currentRatings: { ...s.currentRatings, [category]: newRating }, lastUpdated: Date.now() };
+                    }
+                    return s;
+                }));
+            };
+
+            const updateGoalOverride = (studentId, category, level, text) => {
+                setStudents(students.map(s => 
+                    s.id === studentId ? { 
+                        ...s, 
+                        matrixOverrides: { 
+                            ...s.matrixOverrides, 
+                            [category]: { ...s.matrixOverrides[category], [level]: text } 
+                        } 
+                    } : s
+                ));
+            };
+
+            const getMatrixText = (student, category, level) => {
+                return student.matrixOverrides?.[category]?.[level] || DEFAULT_MATRIX[category][level];
+            };
+
+            const activeStudents = students.filter(s => s.classId === currentClassId);
+
+            const ConfirmationModal = () => {
+                if (!deleteConfirmation) return null;
+                return (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+                            <div className="bg-red-50 w-12 h-12 rounded-full flex items-center justify-center text-red-600 mb-4 mx-auto">
+                                <Icon name="alert-triangle" size={24} />
+                            </div>
+                            <h3 className="text-xl font-bold text-center text-slate-800 mb-2">Are you sure?</h3>
+                            <p className="text-slate-500 text-center mb-6">
+                                You are about to delete <span className="font-bold text-slate-700">"{deleteConfirmation.name}"</span>. This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setDeleteConfirmation(null)} className="flex-1 px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                                <button onClick={() => deleteConfirmation.type === 'class' ? deleteClass(deleteConfirmation.id) : deleteStudent(deleteConfirmation.id)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const ClassListView = () => (
+                <div className="max-w-4xl mx-auto p-6">
+                    <div className="flex justify-between items-center mb-8">
+                        <h1 className="text-3xl font-bold text-slate-800">Class Folders</h1>
+                        <button onClick={() => setIsAddingClass(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">
+                            <Icon name="folder-plus" /> New Class
+                        </button>
+                    </div>
+                    {isAddingClass && (
+                        <div className="mb-6 p-4 bg-white border border-blue-100 rounded-xl flex gap-2 shadow-sm">
+                            <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Class Name" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClass()} />
+                            <button onClick={addClass} className="bg-blue-600 text-white px-4 py-2 rounded-lg">Add</button>
+                        </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {classes.map(cls => (
+                            <div key={cls.id} onClick={() => { setCurrentClassId(cls.id); setView('students'); }} className="group flex items-center justify-between p-6 bg-white border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md cursor-pointer transition">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><Icon name="users" size={24} /></div>
+                                    <span className="text-lg font-semibold text-slate-700">{cls.name}</span>
+                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmation({ type: 'class', id: cls.id, name: cls.name }); }} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 transition"><Icon name="trash-2" size={18} /></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const StudentRubricView = () => {
+                const activeClass = classes.find(c => c.id === currentClassId);
+                return (
+                    <div className={`max-w-[1400px] mx-auto p-6 ${isPrintMode ? 'print-container' : ''}`}>
+                        {!isPrintMode && (
+                            <div className="flex flex-wrap items-center justify-between mb-8 gap-4 no-print">
+                                <div className="flex items-center gap-4">
+                                    <button onClick={() => setView('classes')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"><Icon name="arrow-left" size={18} /> Classes</button>
+                                    <h1 className="text-3xl font-bold text-slate-800">{activeClass?.name}</h1>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button onClick={logClassScores} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm font-bold text-sm">
+                                        <Icon name="save" size={18} /> Log Scores
+                                    </button>
+                                    <button onClick={exportAllStudentsCSV} className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition font-bold text-sm">
+                                        <Icon name="file-spreadsheet" size={18} /> Export Class CSV
+                                    </button>
+                                    <button onClick={() => setIsPrintMode(true)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm font-bold text-sm">
+                                        <Icon name="printer" size={18} /> Print All
+                                    </button>
+                                    <button onClick={() => setIsAddingStudent(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-bold text-sm">
+                                        <Icon name="user-plus" size={18} /> Add Student
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {isPrintMode && (
+                            <div className="flex justify-between items-center mb-10 bg-indigo-600 p-4 rounded-xl text-white shadow-xl no-print">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white/20 p-2 rounded-lg"><Icon name="printer" size={20} /></div>
+                                    <div>
+                                        <h3 className="font-bold">Print Preview</h3>
+                                        <p className="text-indigo-100 text-xs">One student per page. Ready for physical grading.</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => window.print()} className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold shadow-md transition hover:bg-slate-50">Print Now</button>
+                                    <button onClick={() => setIsPrintMode(false)} className="bg-indigo-500 text-white px-4 py-2 rounded-lg hover:bg-indigo-400 transition font-bold">Exit Preview</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {isAddingStudent && !isPrintMode && (
+                            <div className="mb-6 p-4 bg-white border border-indigo-100 rounded-xl flex gap-2 max-w-lg shadow-sm">
+                                <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Student Name" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addStudent()} />
+                                <button onClick={addStudent} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">Add</button>
+                                <button onClick={() => setIsAddingStudent(false)} className="text-slate-500 px-4 font-medium">Cancel</button>
+                            </div>
+                        )}
+
+                        <div className="space-y-12">
+                            {activeStudents.map(student => (
+                                <div key={student.id} className={`bg-white border-2 border-slate-200 rounded-3xl overflow-hidden shadow-sm page-break-after-always rubric-card transition-opacity ${!student.isPresent && !isPrintMode ? 'opacity-50 grayscale' : ''} ${isPrintMode ? 'print:border-black print:border-2 print:rounded-none' : ''}`}>
+                                    <div className={`px-6 py-4 flex justify-between items-center ${isPrintMode ? 'bg-white text-black border-b-2 border-black' : 'bg-slate-800 text-white'}`}>
+                                        <div className="flex items-center gap-4">
+                                            {!isPrintMode && (
+                                                <button 
+                                                    onClick={() => toggleAttendance(student.id)} 
+                                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${student.isPresent ? 'bg-green-500 text-white' : 'bg-slate-600 text-slate-300'}`}
+                                                >
+                                                    <Icon name={student.isPresent ? "user-check" : "user-x"} size={20} />
+                                                </button>
+                                            )}
+                                            <div>
+                                                <h2 className="text-xl font-bold">{student.name}</h2>
+                                                {!student.isPresent && !isPrintMode && <span className="text-xs font-bold text-red-400 uppercase">Absent</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            {!isPrintMode && (
+                                                <>
+                                                    <button onClick={() => { setCurrentStudentId(student.id); setView('student-detail'); setActiveTab('goals'); }} className="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-bold transition"><Icon name="settings" size={16}/> Details</button>
+                                                    <button onClick={() => setDeleteConfirmation({ type: 'student', id: student.id, name: student.name })} className="text-slate-400 hover:text-red-400 flex items-center gap-1 text-sm font-bold transition"><Icon name="trash-2" size={16}/></button>
+                                                </>
+                                            )}
+                                            {isPrintMode && <div className="text-sm font-bold">Date: _________________</div>}
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className={`w-full text-sm border-collapse ${!student.isPresent && !isPrintMode ? 'pointer-events-none' : ''}`}>
+                                            <thead>
+                                                <tr className={`border-b font-bold ${isPrintMode ? 'bg-white border-black text-black' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                                                    <th className={`px-4 py-3 text-left w-32 border-r ${isPrintMode ? 'border-black' : 'border-slate-200'}`}>Category</th>
+                                                    {LEVELS.map(l => (
+                                                        <th key={l} className={`px-4 py-3 text-center border-r last:border-r-0 ${isPrintMode ? 'border-black' : 'border-slate-200'}`}>
+                                                            Level {l}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {CATEGORIES.map(cat => (
+                                                    <tr key={cat} className={`border-b last:border-b-0 ${isPrintMode ? 'border-black' : 'border-slate-100'}`}>
+                                                        <td className={`px-4 py-4 font-bold border-r ${isPrintMode ? 'bg-white border-black' : 'bg-slate-50 border-slate-200'}`}>{cat}</td>
+                                                        {LEVELS.map(level => {
+                                                            const isSelected = student.currentRatings?.[cat] === level;
+                                                            const showSelected = !isPrintMode && isSelected;
+                                                            return (
+                                                                <td key={level} onClick={() => !isPrintMode && updateRating(student.id, cat, level)} className={`px-3 py-4 border-r last:border-r-0 align-top relative ${!isPrintMode ? 'cursor-pointer hover:bg-slate-50' : ''} ${showSelected ? 'bg-indigo-50 border-2 border-indigo-500 z-10 shadow-[inset_0_0_0_2px_rgba(99,102,241,1)]' : ''} ${isPrintMode ? 'border-black' : 'border-slate-200'}`}>
+                                                                    <div className={`text-[11px] leading-relaxed ${showSelected ? 'text-indigo-900 font-bold' : 'text-slate-500 print:text-black'}`}>{getMatrixText(student, cat, level)}</div>
+                                                                    {isPrintMode && <div className="mt-3 w-6 h-6 border-2 border-slate-300 rounded mx-auto print:border-black"></div>}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ))}
+                            {activeStudents.length === 0 && !isAddingStudent && (
+                                <div className="py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                                    <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><Icon name="users" size={32}/></div>
+                                    <h3 className="text-xl font-bold text-slate-700">No students in this class</h3>
+                                    <p className="text-slate-500">Click "Add Student" to begin building your roster.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const ScoreTrendChart = ({ history = [] }) => {
+                const canvasRef = useRef(null);
+                const reversedHistory = useMemo(() => (history ? [...history].reverse() : []), [history]);
+
+                useEffect(() => {
+                    const canvas = canvasRef.current;
+                    if (!canvas) return;
+
+                    const ctx = canvas.getContext('2d');
+                    const dpr = window.devicePixelRatio || 1;
+                    const rect = canvas.getBoundingClientRect();
+
+                    canvas.width = rect.width * dpr;
+                    canvas.height = rect.height * dpr;
+                    ctx.scale(dpr, dpr);
+
+                    const padding = { top: 20, right: 30, bottom: 40, left: 40 };
+                    const width = rect.width - padding.left - padding.right;
+                    const height = rect.height - padding.top - padding.bottom;
+
+                    ctx.clearRect(0, 0, rect.width, rect.height);
+
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i <= 3; i++) {
+                        const y = padding.top + (height * (i / 3));
+                        ctx.beginPath();
+                        ctx.moveTo(padding.left, y);
+                        ctx.lineTo(padding.left + width, y);
+                        ctx.stroke();
+
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.font = '10px sans-serif';
+                        ctx.fillText(4 - i, padding.left - 20, y + 4);
+                    }
+
+                    if (reversedHistory.length < 1) return;
+
+                    CATEGORIES.forEach(category => {
+                        let lastPoint = null;
+                        ctx.beginPath();
+                        ctx.strokeStyle = CATEGORY_COLORS[category];
+                        ctx.lineWidth = 3;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+
+                        reversedHistory.forEach((entry, i) => {
+                            const score = entry?.scores?.[category];
+                            if (score === null || score === undefined) {
+                                lastPoint = null;
+                                return;
+                            }
+
+                            const x = reversedHistory.length > 1 
+                                ? padding.left + (width * (i / (reversedHistory.length - 1)))
+                                : padding.left + (width / 2);
+                            const y = padding.top + (height * (1 - (score - 1) / 3));
+
+                            if (lastPoint === null) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                            lastPoint = { x, y };
+                        });
+                        ctx.stroke();
+
+                        reversedHistory.forEach((entry, i) => {
+                            const score = entry?.scores?.[category];
+                            if (score === null || score === undefined) return;
+
+                            const x = reversedHistory.length > 1 
+                                ? padding.left + (width * (i / (reversedHistory.length - 1)))
+                                : padding.left + (width / 2);
+                            const y = padding.top + (height * (1 - (score - 1) / 3));
+                            
+                            ctx.fillStyle = CATEGORY_COLORS[category];
+                            ctx.beginPath();
+                            ctx.arc(x, y, 4, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.strokeStyle = 'white';
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+                        });
+                    });
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    const labelCount = Math.min(reversedHistory.length, 5);
+                    if (reversedHistory.length > 0) {
+                        for (let i = 0; i < labelCount; i++) {
+                            const index = labelCount > 1 
+                                ? Math.floor(i * (reversedHistory.length - 1) / (labelCount - 1))
+                                : 0;
+                            const entry = reversedHistory[index];
+                            if (!entry) continue;
+                            const x = reversedHistory.length > 1 
+                                ? padding.left + (width * (index / (reversedHistory.length - 1)))
+                                : padding.left + (width / 2);
+                            
+                            ctx.save();
+                            ctx.translate(x, padding.top + height + 10);
+                            ctx.rotate(Math.PI / 4);
+                            ctx.fillText(entry.date || '', 0, 0);
+                            ctx.restore();
+                        }
+                    }
+
+                }, [reversedHistory]);
+
+                return (
+                    <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold flex items-center gap-2">
+                                <Icon name="trending-up" size={20} className="text-indigo-400" /> Progress Trend
+                            </h3>
+                            <div className="flex flex-wrap gap-3">
+                                {CATEGORIES.map(c => (
+                                    <div key={c} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[c] }}></div>
+                                        <span className="opacity-70">{c}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="relative w-full h-64">
+                            {reversedHistory.length < 1 ? (
+                                <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm italic">
+                                    No records logged for this student yet.
+                                </div>
+                            ) : (
+                                <canvas ref={canvasRef} className="w-full h-full" />
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const StudentDetailView = () => {
+                const student = students.find(s => s.id === currentStudentId);
+                if (!student) return null;
+
+                const history = student.history || [];
+                
+                return (
+                    <div className="max-w-5xl mx-auto p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <button onClick={() => setView('students')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"><Icon name="arrow-left" size={18} /> Back to Class</button>
+                            <button onClick={() => exportStudentCSV(student)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition shadow-sm font-bold text-sm">
+                                <Icon name="download" size={16} /> Export Student CSV
+                            </button>
+                        </div>
+                        
+                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+                            <div className="px-8 py-6 border-b border-slate-100 flex flex-wrap gap-4 justify-between items-end">
+                                <div>
+                                    <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-1">Student Profile</p>
+                                    <h1 className="text-4xl font-black text-slate-800">{student.name}</h1>
+                                </div>
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <button onClick={() => setActiveTab('goals')} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'goals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Goal Matrix</button>
+                                    <button onClick={() => setActiveTab('history')} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Log History</button>
+                                </div>
+                            </div>
+
+                            <div className="p-8">
+                                {activeTab === 'goals' ? (
+                                    <div className="grid grid-cols-1 gap-8">
+                                        {CATEGORIES.map(category => (
+                                            <div key={category} className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                                                <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                    <div className="w-2 h-6 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[category] }}></div>
+                                                    {category}
+                                                </h2>
+                                                <div className="space-y-4">
+                                                    {LEVELS.map(level => (
+                                                        <div key={level} className="flex gap-4 items-start">
+                                                            <div className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-bold text-xs ${level === 4 ? 'bg-green-100 text-green-700' : 'bg-white text-slate-400 border border-slate-200'}`}>{level}</div>
+                                                            <textarea className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[60px] bg-white transition" value={getMatrixText(student, category, level)} onChange={(e) => updateGoalOverride(student.id, category, level, e.target.value)} />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8">
+                                        <ScoreTrendChart history={history} />
+                                        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                                            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                                                <h3 className="font-bold text-slate-800">Score History</h3>
+                                                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{history.length} Logs</span>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black tracking-widest">
+                                                        <tr>
+                                                            <th className="px-6 py-4 text-left">Date</th>
+                                                            {CATEGORIES.map(c => <th key={c} className="px-4 py-4 text-center">{c}</th>)}
+                                                            <th className="px-6 py-4 text-right">Delete</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {history.map(entry => (
+                                                            <tr key={entry.timestamp} className="hover:bg-slate-50 transition">
+                                                                <td className="px-6 py-4 font-bold text-slate-700">{entry.date}</td>
+                                                                {CATEGORIES.map(c => (
+                                                                    <td key={c} className="px-4 py-4 text-center">
+                                                                        <span className={`inline-block w-10 h-8 rounded-lg flex items-center justify-center font-black text-sm ${entry.scores?.[c] === null ? 'text-slate-300 italic text-[10px]' : ''}`} style={entry.scores?.[c] !== null ? { backgroundColor: `${CATEGORY_COLORS[c]}15`, color: CATEGORY_COLORS[c] } : {}}>
+                                                                            {entry.scores?.[c] ?? 'N/A'}
+                                                                        </span>
+                                                                    </td>
+                                                                ))}
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <button onClick={() => deleteHistoryEntry(student.id, entry.timestamp)} className="text-slate-300 hover:text-red-500 transition">
+                                                                        <Icon name="trash-2" size={16} />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {history.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={CATEGORIES.length + 2} className="px-6 py-12 text-center text-slate-400 italic">No historical data recorded for this student.</td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className={`min-h-screen ${isPrintMode ? 'bg-white' : 'bg-slate-50 pb-20'}`}>
+                    <ConfirmationModal />
+                    {!isPrintMode && (
+                        <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 no-print">
+                            <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setView('classes')} className="bg-blue-600 p-1.5 rounded-lg shadow-sm hover:bg-blue-700 transition"><Icon name="graduation-cap" className="text-white" /></button>
+                                    <span className="font-bold text-xl tracking-tight text-slate-800">EduMatrix Rubric</span>
+                                </div>
+                                <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest">Internal Use Only</div>
+                            </div>
+                        </nav>
+                    )}
+                    <main>
+                        {view === 'classes' && <ClassListView />}
+                        {view === 'students' && <StudentRubricView />}
+                        {view === 'student-detail' && <StudentDetailView />}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
