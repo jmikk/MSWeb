@@ -2,480 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Transformation Lab</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSWeb Tool Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            position: fixed;
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-            -webkit-user-select: none;
-            background-color: #f8fafc;
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f9; padding: 20px; text-align: center; }
+        h1 { color: #333; }
+        #tool-container { 
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; 
+            max-width: 1000px; margin: 40px auto; min-height: 100px;
         }
-
-        body { display: flex; flex-direction: column; }
-
-        .canvas-container {
-            position: relative;
-            width: 100%;
-            height: 60vh;
-            background-color: #ffffff;
-            border-bottom: 2px solid #e2e8f0;
-            overflow: hidden;
-            touch-action: none;
+        .tool-button {
+            background: white; border: 1px solid #ddd; padding: 20px 30px;
+            border-radius: 8px; cursor: grab; text-decoration: none;
+            color: #007bff; font-weight: bold; transition: transform 0.2s, box-shadow 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            min-width: 150px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-
-        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-
-        .modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        .modal.active { display: flex; }
-        
-        button, input, select { user-select: auto; -webkit-user-select: auto; touch-action: manipulation; }
-        
-        .controls-area {
-            flex-grow: 1;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
-            padding: 1rem;
-        }
+        .tool-button:active { cursor: grabbing; }
+        .tool-button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.15); }
+        .ghost { opacity: 0.4; background: #c8ebfb; }
     </style>
 </head>
-<body class="font-sans">
+<body>
 
-    <header class="p-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
-        <h1 class="text-xl font-bold text-slate-800 text-center">Transformation Lab</h1>
-        <div class="mt-1 flex justify-center gap-4 text-xs font-mono font-bold">
-            <div class="text-blue-600">Crosshair: (<span id="val-x">0</span>, <span id="val-y">0</span>)</div>
-            <div id="status-msg" class="text-slate-500 italic truncate max-w-[150px]">Place Pre-Image points.</div>
-        </div>
-    </header>
+    <h1>MSWeb Suite</h1>
+    <p>Drag to rearrange your tools</p>
 
-    <main class="flex-grow flex flex-col overflow-hidden">
-        <div class="canvas-container shrink-0" id="container">
-            <canvas id="gridCanvas"></canvas>
-        </div>
-
-        <div class="controls-area">
-            <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                    <div class="flex justify-center gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
-                        <button id="mode-pre" class="flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm transition-colors">1. Pre-Image</button>
-                        <button id="mode-img" class="flex-1 py-2 rounded-lg font-bold text-slate-600 transition-colors">2. Image</button>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2 mb-4">
-                        <button onclick="openModal('translateModal')" class="p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold border border-indigo-100 active:bg-indigo-100 text-sm">Translate</button>
-                        <button onclick="openModal('rotateModal')" class="p-3 bg-amber-50 text-amber-700 rounded-xl font-bold border border-amber-100 active:bg-amber-100 text-sm">Rotate</button>
-                        <button onclick="openModal('reflectModal')" class="p-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-100 active:bg-emerald-100 text-sm">Reflect</button>
-                        <button onclick="openModal('dilateModal')" class="p-3 bg-rose-50 text-rose-700 rounded-xl font-bold border border-rose-100 active:bg-rose-100 text-sm">Dilate</button>
-                    </div>
-                    
-                    <button id="btn-check" class="w-full p-3 mb-2 bg-slate-800 text-white rounded-xl font-bold shadow-lg active:bg-slate-700 transition-transform active:scale-95 text-sm uppercase tracking-widest">Check My Work</button>
-
-                    <button id="btn-clear" class="w-full py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold border border-red-100">Clear All</button>
-                </div>
-
-                <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 shadow-sm">
-                    <h2 class="text-sm font-bold text-blue-800 mb-2 uppercase tracking-wider">Challenge: Plot This Shape</h2>
-                    <div class="flex gap-2 mb-3">
-                        <select id="point-count" class="flex-1 p-2 rounded-lg border border-blue-200 text-sm font-bold bg-white">
-                            <option value="3">Triangle (3)</option>
-                            <option value="4" selected>Quadrilateral (4)</option>
-                            <option value="5">Pentagon (5)</option>
-                        </select>
-                        <button id="btn-generate" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700">Generate</button>
-                    </div>
-                    <div id="coords-display" class="bg-white p-3 rounded-xl border border-blue-100 min-h-[80px] font-mono text-sm flex flex-col justify-center items-center text-blue-900">
-                        <span class="italic text-slate-400 text-center">Click generate to see coordinates...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modals -->
-    <div id="translateModal" class="modal p-4" onclick="closeModal()">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
-            <h2 class="text-xl font-bold mb-4">Translate</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-bold text-slate-600">Horizontal (x)</label>
-                    <input type="number" id="transX" value="0" step="1" class="w-full p-3 bg-slate-50 border rounded-lg">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-600">Vertical (y)</label>
-                    <input type="number" id="transY" value="0" step="1" class="w-full p-3 bg-slate-50 border rounded-lg">
-                </div>
-                <button onclick="setTransformation('translate')" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Apply Transformation</button>
-                <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="rotateModal" class="modal p-4" onclick="closeModal()">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
-            <h2 class="text-xl font-bold mb-4">Rotate about (0,0)</h2>
-            <div class="grid grid-cols-2 gap-2 mb-4">
-                <button onclick="setTransformation('rotate', 90)" class="p-4 border rounded-xl font-bold bg-slate-50">90° CW</button>
-                <button onclick="setTransformation('rotate', -90)" class="p-4 border rounded-xl font-bold bg-slate-50">90° CCW</button>
-                <button onclick="setTransformation('rotate', 180)" class="p-4 border rounded-xl font-bold bg-slate-50">180°</button>
-                <button onclick="setTransformation('rotate', 270)" class="p-4 border rounded-xl font-bold bg-slate-50">270° CW</button>
-            </div>
-            <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2">Cancel</button>
-        </div>
-    </div>
-
-    <div id="reflectModal" class="modal p-4" onclick="closeModal()">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
-            <h2 class="text-xl font-bold mb-4">Reflect</h2>
-            <div class="space-y-2">
-                <button onclick="setTransformation('reflect', 'x')" class="w-full p-4 border rounded-xl font-bold">Across X-Axis</button>
-                <button onclick="setTransformation('reflect', 'y')" class="w-full p-4 border rounded-xl font-bold">Across Y-Axis</button>
-                <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2 mt-2">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="dilateModal" class="modal p-4" onclick="closeModal()">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-sm" onclick="event.stopPropagation()">
-            <h2 class="text-xl font-bold mb-4">Dilate about (0,0)</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-bold text-slate-600 mb-1">Scale Factor (k)</label>
-                    <div class="flex gap-2">
-                        <button onclick="document.getElementById('dilateScale').value=0.5" class="flex-1 py-2 bg-slate-100 rounded text-xs font-bold">0.5x</button>
-                        <button onclick="document.getElementById('dilateScale').value=2" class="flex-1 py-2 bg-slate-100 rounded text-xs font-bold">2x</button>
-                        <button onclick="document.getElementById('dilateScale').value=3" class="flex-1 py-2 bg-slate-100 rounded text-xs font-bold">3x</button>
-                    </div>
-                    <input type="number" id="dilateScale" value="2" step="0.5" class="w-full p-3 mt-2 bg-slate-50 border rounded-lg text-center font-bold text-lg">
-                </div>
-                <button onclick="setTransformation('dilate')" class="w-full bg-rose-600 text-white py-3 rounded-xl font-bold">Apply Dilation</button>
-                <button onclick="closeModal()" class="w-full text-slate-400 font-bold py-2">Cancel</button>
-            </div>
-        </div>
+    <div id="tool-container">
+        <p id="loading">Scanning repository...</p>
     </div>
 
     <script>
-        const canvas = document.getElementById('gridCanvas');
-        const ctx = canvas.getContext('2d');
-        const container = document.getElementById('container');
-        const valX = document.getElementById('val-x');
-        const valY = document.getElementById('val-y');
-        const statusMsg = document.getElementById('status-msg');
-        const coordsDisplay = document.getElementById('coords-display');
+        const REPO_URL = 'https://api.github.com/repos/jmikk/MSWeb/contents/';
+        const container = document.getElementById('tool-container');
 
-        let prePoints = [];
-        let imgPoints = [];
-        let targetPoints = [];
-        let currentMode = 'pre'; 
-        let gridSize = 30;
-        let origin = { x: 0, y: 0 };
-
-        let isAnimatingCheck = false;
-        let animMode = null; // 'rotate', 'dilate', or null
-        let animProgress = 0;
-        let animTargetScale = 1;
-        let animTargetAngle = 0;
-
-        function init() {
-            resize();
-            window.addEventListener('resize', resize);
-            
-            const getPos = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
-            };
-
-            const handleMove = (e) => {
-                const pos = getPos(e);
-                const cart = toCartesian(pos.x, pos.y);
-                valX.textContent = cart.x;
-                valY.textContent = cart.y;
-            };
-
-            const handleEnd = (e) => {
-                const pos = getPos(e.changedTouches ? e.changedTouches[0] : e);
-                const cart = toCartesian(pos.x, pos.y);
-                let list = currentMode === 'pre' ? prePoints : imgPoints;
+        async function loadTools() {
+            try {
+                const response = await fetch(REPO_URL);
+                const data = await response.json();
                 
-                // Allow removing points
-                const idx = list.findIndex(p => Math.abs(p.x - cart.x) < 0.25 && Math.abs(p.y - cart.y) < 0.25);
-                if (idx !== -1) {
-                    list.splice(idx, 1);
-                } else {
-                    list.push(cart);
-                }
-                
-                // Reset animations when manually editing
-                isAnimatingCheck = false;
-                animMode = null;
-            };
+                document.getElementById('loading').remove();
 
-            canvas.addEventListener('mousemove', handleMove);
-            canvas.addEventListener('mouseup', handleEnd);
-            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleMove(e); }, {passive:false});
-            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive:false});
-            canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(e); }, {passive:false});
-            
-            document.getElementById('mode-pre').onclick = () => switchWorkflow('pre');
-            document.getElementById('mode-img').onclick = () => switchWorkflow('img');
-            document.getElementById('btn-clear').onclick = clearAll;
-            document.getElementById('btn-check').onclick = checkWork;
-            document.getElementById('btn-generate').onclick = generateRandomShape;
-            
-            requestAnimationFrame(gameLoop);
-        }
-
-        function generateRandomShape() {
-            clearAll();
-            const count = parseInt(document.getElementById('point-count').value);
-            coordsDisplay.innerHTML = "";
-            for(let i = 0; i < count; i++) {
-                const rx = (Math.floor(Math.random() * 15) - 7);
-                const ry = (Math.floor(Math.random() * 15) - 7);
-                const pTag = document.createElement('div');
-                pTag.className = "font-bold";
-                pTag.innerHTML = `P${i+1}: <span class="text-blue-600">(${rx}, ${ry})</span>`;
-                coordsDisplay.appendChild(pTag);
-            }
-            statusMsg.textContent = "Plot the coordinates shown!";
-        }
-
-        function gameLoop() { 
-            draw(); 
-            requestAnimationFrame(gameLoop); 
-        }
-
-        function resize() {
-            const rect = container.getBoundingClientRect();
-            canvas.width = rect.width * devicePixelRatio;
-            canvas.height = rect.height * devicePixelRatio;
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-            origin.x = rect.width / 2;
-            origin.y = rect.height / 2;
-            const minDim = Math.min(rect.width, rect.height);
-            gridSize = Math.floor(minDim / 24); 
-        }
-
-        function toCartesian(px, py) {
-            return { 
-                x: Math.round((px - origin.x) / gridSize), 
-                y: Math.round((origin.y - py) / gridSize) 
-            };
-        }
-
-        function toPixels(cx, cy) {
-            return { x: origin.x + (cx * gridSize), y: origin.y - (cy * gridSize) };
-        }
-
-        function drawShape(list, color, labelPrefix, alpha = 1, forceInt = true) {
-            if (list.length === 0) return;
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            list.forEach((p, i) => {
-                const pix = toPixels(p.x, p.y);
-                if (i === 0) ctx.moveTo(pix.x, pix.y);
-                else ctx.lineTo(pix.x, pix.y);
-            });
-            if(list.length > 2) ctx.closePath();
-            ctx.stroke();
-            
-            list.forEach((p, i) => {
-                const pix = toPixels(p.x, p.y);
-                ctx.beginPath();
-                ctx.fillStyle = color;
-                ctx.arc(pix.x, pix.y, 5, 0, Math.PI * 2);
-                ctx.fill();
-                
-                ctx.save();
-                ctx.globalAlpha = 1.0; 
-                ctx.font = 'bold 11px monospace';
-                ctx.textAlign = 'center';
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 3;
-                
-                const dispX = forceInt ? Math.round(p.x) : p.x.toFixed(1);
-                const dispY = forceInt ? Math.round(p.y) : p.y.toFixed(1);
-                const label = `${labelPrefix}${i+1} (${dispX}, ${dispY})`;
-                
-                ctx.strokeText(label, pix.x, pix.y - 12);
-                ctx.fillStyle = '#1e293b';
-                ctx.fillText(label, pix.x, pix.y - 12);
-                ctx.restore();
-            });
-            ctx.restore();
-        }
-
-        function draw() {
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
-            ctx.clearRect(0, 0, w, h);
-            
-            // Draw Main Grid Lines
-            ctx.beginPath(); 
-            ctx.strokeStyle = '#e2e8f0'; 
-            ctx.lineWidth = 1;
-            for (let i = -20; i <= 20; i++) { 
-                let px = toPixels(i, 0); ctx.moveTo(px.x, 0); ctx.lineTo(px.x, h);
-                let py = toPixels(0, i); ctx.moveTo(0, py.y); ctx.lineTo(w, py.y);
-            }
-            ctx.stroke();
-
-            // Draw Axes
-            ctx.beginPath(); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2.5;
-            ctx.moveTo(0, origin.y); ctx.lineTo(w, origin.y);
-            ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, h);
-            ctx.stroke();
-
-            // Axis labels
-            ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-            for (let i = -15; i <= 15; i += 5) { 
-                if(i!==0){ 
-                    let px = toPixels(i,0); ctx.fillText(i, px.x, origin.y+15); 
-                    let py = toPixels(0,i); ctx.fillText(i, origin.x-15, py.y+4); 
-                } 
-            }
-
-            // 1. Draw Pre-Image
-            drawShape(prePoints, '#3b82f6', 'P');
-
-            // 2. Handle & Draw Animation
-            if (animMode && prePoints.length > 0) {
-                animProgress = Math.min(1, animProgress + 0.02);
-                let animatedPoints = [];
-
-                if (animMode === 'rotate') {
-                    const currentAngle = animTargetAngle * animProgress;
-                    animatedPoints = prePoints.map(p => ({ 
-                        x: p.x * Math.cos(currentAngle) - p.y * Math.sin(currentAngle), 
-                        y: p.x * Math.sin(currentAngle) + p.y * Math.cos(currentAngle) 
-                    }));
-                    drawShape(animatedPoints, '#f59e0b', "R", 0.4, false);
-                } else if (animMode === 'dilate') {
-                    const currentScale = 1 + (animTargetScale - 1) * animProgress;
-                    animatedPoints = prePoints.map(p => ({ 
-                        x: p.x * currentScale, 
-                        y: p.y * currentScale 
-                    }));
-                    drawShape(animatedPoints, '#f43f5e', "D", 0.4, false);
-                }
-            }
-            
-            // 3. Draw Ghost Image (the "Correct" solution) when checking
-            if (isAnimatingCheck && targetPoints.length > 0) {
-                drawShape(targetPoints, '#10b981', "T", 0.3);
-            }
-
-            // 4. Draw User's Image attempt
-            drawShape(imgPoints, '#ef4444', "P'");
-        }
-
-        function switchWorkflow(mode) {
-            currentMode = mode;
-            document.getElementById('mode-pre').className = mode === 'pre' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
-            document.getElementById('mode-img').className = mode === 'img' ? "flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white shadow-sm" : "flex-1 py-2 rounded-lg font-bold text-slate-600";
-            statusMsg.textContent = mode === 'pre' ? "Place Pre-Image points." : "Draw the resulting Image.";
-        }
-
-        function openModal(id) { 
-            document.getElementById(id).classList.add('active'); 
-        }
-
-        function closeModal() { 
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
-        }
-
-        function clearAll() { 
-            prePoints = []; 
-            imgPoints = []; 
-            targetPoints = []; 
-            isAnimatingCheck = false; 
-            animMode = null; 
-            switchWorkflow('pre'); 
-        }
-        
-        function setTransformation(type, val) {
-            if (prePoints.length === 0) {
-                statusMsg.textContent = "Add pre-image points first!";
-                closeModal();
-                return;
-            }
-
-            // Reset animation state
-            animMode = null;
-            animProgress = 0;
-
-            if (type === 'translate') {
-                const dx = Math.round(parseFloat(document.getElementById('transX').value)) || 0;
-                const dy = Math.round(parseFloat(document.getElementById('transY').value)) || 0;
-                targetPoints = prePoints.map(p => ({ x: Math.round(p.x + dx), y: Math.round(p.y + dy) }));
-            } 
-            else if (type === 'rotate') {
-                targetPoints = prePoints.map(p => {
-                    if (val === 90) return { x: p.y, y: -p.x };
-                    if (val === -90) return { x: -p.y, y: p.x };
-                    if (val === 180) return { x: -p.x, y: -p.y };
-                    if (val === 270) return { x: -p.y, y: p.x };
-                    return p;
+                data.forEach(item => {
+                    // Filter: Only include HTML files or directories, skip hidden/config files
+                    if (item.name !== 'index.html' && (item.type === 'dir' || item.name.endsWith('.html'))) {
+                        const btn = document.createElement('a');
+                        btn.className = 'tool-button';
+                        btn.href = item.html_url;
+                        // Clean up name (e.g., "my_tool.html" -> "My Tool")
+                        btn.innerText = item.name.replace('.html', '').replace(/[-_]/g, ' ');
+                        container.appendChild(btn);
+                    }
                 });
-                animMode = 'rotate';
-                animTargetAngle = -(val * Math.PI / 180);
-            } 
-            else if (type === 'reflect') {
-                if (val === 'x') targetPoints = prePoints.map(p => ({ x: p.x, y: -p.y }));
-                else if (val === 'y') targetPoints = prePoints.map(p => ({ x: -p.x, y: p.y }));
-            }
-            else if (type === 'dilate') {
-                const k = parseFloat(document.getElementById('dilateScale').value) || 1;
-                targetPoints = prePoints.map(p => ({ x: Math.round(p.x * k), y: Math.round(p.y * k) }));
-                animMode = 'dilate';
-                animTargetScale = k;
-            }
 
-            switchWorkflow('img'); 
-            closeModal();
+                // Initialize Sortable
+                new Sortable(container, {
+                    animation: 150,
+                    ghostClass: 'ghost'
+                });
+
+            } catch (error) {
+                console.error("Error fetching repo:", error);
+                container.innerHTML = "<p>Error loading tools. Check the console for details.</p>";
+            }
         }
 
-        function checkWork() { 
-            if (imgPoints.length === 0) {
-                statusMsg.textContent = "Plot your answer first!";
-                return;
-            }
-            isAnimatingCheck = true; 
-            
-            // Basic logic to see if points match (ignoring order)
-            let correct = false;
-            if (imgPoints.length === targetPoints.length) {
-                correct = targetPoints.every(t => 
-                    imgPoints.some(i => i.x === t.x && i.y === t.y)
-                );
-            }
-            
-            statusMsg.textContent = correct ? "Perfect! Correct Image." : "Not quite. Check the ghost shape.";
-        }
-
-        window.onload = init;
+        loadTools();
     </script>
 </body>
 </html>
