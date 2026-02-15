@@ -44,7 +44,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo, useRef, memo } = React;
         
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => {
@@ -91,6 +91,51 @@
         };
         const LEVELS = [4, 3, 2, 1];
 
+        /**
+         * Optimized Input component.
+         * Uses local state for fluid typing and only pushes updates to the parent
+         * on blur or enter to prevent re-render focus stealing.
+         */
+        const DailyGoalInput = ({ initialValue, onSave }) => {
+            const [localValue, setLocalValue] = useState(initialValue || '');
+            
+            // Keep local state in sync if initialValue changes from outside
+            useEffect(() => {
+                if (initialValue !== localValue) {
+                    setLocalValue(initialValue || '');
+                }
+            }, [initialValue]);
+
+            const handleBlur = () => {
+                if (localValue !== initialValue) {
+                    onSave(localValue);
+                }
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    e.currentTarget.blur(); // Triggers handleBlur
+                }
+            };
+
+            return (
+                <div className="relative w-full">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                        <Icon name="target" size={14}/>
+                    </div>
+                    <input 
+                        type="text" 
+                        placeholder="Daily Focus / Goal / Observation..." 
+                        className="w-full bg-slate-700/50 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:bg-slate-700 focus:border-indigo-500 outline-none transition"
+                        value={localValue}
+                        onChange={(e) => setLocalValue(e.target.value)}
+                        onBlur={handleBlur}
+                        onKeyDown={handleKeyDown}
+                    />
+                </div>
+            );
+        };
+
         function App() {
             const [view, setView] = useState('classes');
             const [currentClassId, setCurrentClassId] = useState(null);
@@ -130,6 +175,7 @@
                     name: newEntryName,
                     matrixOverrides: {},
                     currentRatings: { Belonging: null, Mastery: null, Independence: null, Generosity: null },
+                    dailyGoal: '',
                     history: [],
                     isPresent: true,
                     lastUpdated: Date.now()
@@ -148,41 +194,31 @@
                     const logEntry = {
                         date,
                         timestamp,
-                        scores: { ...s.currentRatings }
+                        scores: { ...s.currentRatings },
+                        note: s.dailyGoal 
                     };
                     return { ...s, history: [logEntry, ...(s.history || [])].slice(0, 30) };
                 }));
-            };
-
-            const exportStudentCSV = (student) => {
-                const headers = ['Date', ...CATEGORIES];
-                const rows = (student.history || []).map(entry => [
-                    entry.date,
-                    ...CATEGORIES.map(cat => entry.scores?.[cat] ?? 'N/A')
-                ]);
-                
-                const csvContent = [headers, ...rows].map(r => r.join(',')).join('\n');
-                downloadCSV(csvContent, `${student.name.replace(/\s+/g, '_')}_Progress.csv`);
             };
 
             const exportAllStudentsCSV = () => {
                 const activeClass = classes.find(c => c.id === currentClassId);
                 const classStudents = students.filter(s => s.classId === currentClassId);
                 
-                const headers = ['Student Name', 'Date', ...CATEGORIES];
+                const headers = ['Student Name', 'Date', ...CATEGORIES, 'Note/Goal'];
                 const allRows = [];
 
                 classStudents.forEach(student => {
                     const history = student.history || [];
                     if (history.length === 0) {
-                        // Include student even if no history, with empty fields
-                        allRows.push([student.name, 'No History', ...CATEGORIES.map(() => 'N/A')]);
+                        allRows.push([student.name, 'No History', ...CATEGORIES.map(() => 'N/A'), student.dailyGoal || '']);
                     } else {
                         history.forEach(entry => {
                             allRows.push([
                                 student.name,
                                 entry.date,
-                                ...CATEGORIES.map(cat => entry.scores?.[cat] ?? 'N/A')
+                                ...CATEGORIES.map(cat => entry.scores?.[cat] ?? 'N/A'),
+                                (entry.note || '').replace(/,/g, ';')
                             ]);
                         });
                     }
@@ -207,6 +243,12 @@
             const toggleAttendance = (studentId) => {
                 setStudents(students.map(s => 
                     s.id === studentId ? { ...s, isPresent: !s.isPresent } : s
+                ));
+            };
+
+            const updateDailyGoal = (studentId, text) => {
+                setStudents(students.map(s => 
+                    s.id === studentId ? { ...s, dailyGoal: text } : s
                 ));
             };
 
@@ -265,7 +307,7 @@
                             </div>
                             <h3 className="text-xl font-bold text-center text-slate-800 mb-2">Are you sure?</h3>
                             <p className="text-slate-500 text-center mb-6">
-                                You are about to delete <span className="font-bold text-slate-700">"{deleteConfirmation.name}"</span>. This action cannot be undone.
+                                You are about to delete <span className="font-bold text-slate-700">"{deleteConfirmation.name}"</span>.
                             </p>
                             <div className="flex gap-3">
                                 <button onClick={() => setDeleteConfirmation(null)} className="flex-1 px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-600 hover:bg-slate-50 transition">Cancel</button>
@@ -280,14 +322,17 @@
                 <div className="max-w-4xl mx-auto p-6">
                     <div className="flex justify-between items-center mb-8">
                         <h1 className="text-3xl font-bold text-slate-800">Class Folders</h1>
-                        <button onClick={() => setIsAddingClass(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">
+                        <button onClick={() => { setIsAddingClass(true); setNewEntryName(''); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-bold">
                             <Icon name="folder-plus" /> New Class
                         </button>
                     </div>
                     {isAddingClass && (
-                        <div className="mb-6 p-4 bg-white border border-blue-100 rounded-xl flex gap-2 shadow-sm">
-                            <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Class Name" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClass()} />
-                            <button onClick={addClass} className="bg-blue-600 text-white px-4 py-2 rounded-lg">Add</button>
+                        <div className="mb-6 p-4 bg-white border border-blue-100 rounded-xl flex gap-2 shadow-sm animate-in fade-in slide-in-from-top-2">
+                            <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Class Name (e.g. 1st Period English)" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClass()} />
+                            <div className="flex gap-2">
+                                <button onClick={addClass} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add</button>
+                                <button onClick={() => setIsAddingClass(false)} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold">Cancel</button>
+                            </div>
                         </div>
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -309,75 +354,77 @@
                 return (
                     <div className={`max-w-[1400px] mx-auto p-6 ${isPrintMode ? 'print-container' : ''}`}>
                         {!isPrintMode && (
-                            <div className="flex flex-wrap items-center justify-between mb-8 gap-4 no-print">
-                                <div className="flex items-center gap-4">
-                                    <button onClick={() => setView('classes')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"><Icon name="arrow-left" size={18} /> Classes</button>
-                                    <h1 className="text-3xl font-bold text-slate-800">{activeClass?.name}</h1>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <button onClick={logClassScores} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm font-bold text-sm">
-                                        <Icon name="save" size={18} /> Log Scores
-                                    </button>
-                                    <button onClick={exportAllStudentsCSV} className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition font-bold text-sm">
-                                        <Icon name="file-spreadsheet" size={18} /> Export Class CSV
-                                    </button>
-                                    <button onClick={() => setIsPrintMode(true)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm font-bold text-sm">
-                                        <Icon name="printer" size={18} /> Print All
-                                    </button>
-                                    <button onClick={() => setIsAddingStudent(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-bold text-sm">
-                                        <Icon name="user-plus" size={18} /> Add Student
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {isPrintMode && (
-                            <div className="flex justify-between items-center mb-10 bg-indigo-600 p-4 rounded-xl text-white shadow-xl no-print">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white/20 p-2 rounded-lg"><Icon name="printer" size={20} /></div>
-                                    <div>
-                                        <h3 className="font-bold">Print Preview</h3>
-                                        <p className="text-indigo-100 text-xs">One student per page. Ready for physical grading.</p>
+                            <div className="flex flex-col mb-8 no-print">
+                                <div className="flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setView('classes')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"><Icon name="arrow-left" size={18} /> Classes</button>
+                                        <h1 className="text-3xl font-bold text-slate-800">{activeClass?.name}</h1>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button onClick={logClassScores} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm font-bold text-sm">
+                                            <Icon name="save" size={18} /> Log Scores
+                                        </button>
+                                        <button onClick={exportAllStudentsCSV} className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition font-bold text-sm">
+                                            <Icon name="file-spreadsheet" size={18} /> Export CSV
+                                        </button>
+                                        <button onClick={() => setIsPrintMode(true)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm font-bold text-sm">
+                                            <Icon name="printer" size={18} /> Print View
+                                        </button>
+                                        <button onClick={() => { setIsAddingStudent(true); setNewEntryName(''); }} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-bold text-sm">
+                                            <Icon name="user-plus" size={18} /> Add Student
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => window.print()} className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold shadow-md transition hover:bg-slate-50">Print Now</button>
-                                    <button onClick={() => setIsPrintMode(false)} className="bg-indigo-500 text-white px-4 py-2 rounded-lg hover:bg-indigo-400 transition font-bold">Exit Preview</button>
-                                </div>
-                            </div>
-                        )}
 
-                        {isAddingStudent && !isPrintMode && (
-                            <div className="mb-6 p-4 bg-white border border-indigo-100 rounded-xl flex gap-2 max-w-lg shadow-sm">
-                                <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Student Name" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addStudent()} />
-                                <button onClick={addStudent} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">Add</button>
-                                <button onClick={() => setIsAddingStudent(false)} className="text-slate-500 px-4 font-medium">Cancel</button>
+                                {isAddingStudent && (
+                                    <div className="mt-6 p-4 bg-white border border-indigo-100 rounded-xl flex gap-2 shadow-sm animate-in fade-in slide-in-from-top-2">
+                                        <input autoFocus className="flex-1 border border-slate-200 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Full Student Name" value={newEntryName} onChange={(e) => setNewEntryName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addStudent()} />
+                                        <div className="flex gap-2">
+                                            <button onClick={addStudent} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">Add Student</button>
+                                            <button onClick={() => setIsAddingStudent(false)} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold">Cancel</button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         <div className="space-y-12">
                             {activeStudents.map(student => (
                                 <div key={student.id} className={`bg-white border-2 border-slate-200 rounded-3xl overflow-hidden shadow-sm page-break-after-always rubric-card transition-opacity ${!student.isPresent && !isPrintMode ? 'opacity-50 grayscale' : ''} ${isPrintMode ? 'print:border-black print:border-2 print:rounded-none' : ''}`}>
-                                    <div className={`px-6 py-4 flex justify-between items-center ${isPrintMode ? 'bg-white text-black border-b-2 border-black' : 'bg-slate-800 text-white'}`}>
-                                        <div className="flex items-center gap-4">
+                                    <div className={`px-6 py-4 flex flex-col md:flex-row gap-4 items-center ${isPrintMode ? 'bg-white text-black border-b-2 border-black' : 'bg-slate-800 text-white'}`}>
+                                        <div className="flex items-center gap-4 w-full md:w-auto">
                                             {!isPrintMode && (
                                                 <button 
                                                     onClick={() => toggleAttendance(student.id)} 
-                                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${student.isPresent ? 'bg-green-500 text-white' : 'bg-slate-600 text-slate-300'}`}
+                                                    className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all ${student.isPresent ? 'bg-green-500 text-white' : 'bg-slate-600 text-slate-300'}`}
                                                 >
                                                     <Icon name={student.isPresent ? "user-check" : "user-x"} size={20} />
                                                 </button>
                                             )}
-                                            <div>
-                                                <h2 className="text-xl font-bold">{student.name}</h2>
-                                                {!student.isPresent && !isPrintMode && <span className="text-xs font-bold text-red-400 uppercase">Absent</span>}
+                                            <div className="min-w-[140px]">
+                                                <h2 className="text-xl font-bold truncate leading-tight">{student.name}</h2>
+                                                {!student.isPresent && !isPrintMode && <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Absent</span>}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-4">
+
+                                        <div className="flex-1 w-full flex items-center gap-3">
+                                            {!isPrintMode ? (
+                                                <DailyGoalInput 
+                                                    initialValue={student.dailyGoal} 
+                                                    onSave={(val) => updateDailyGoal(student.id, val)} 
+                                                />
+                                            ) : (
+                                                <div className="flex-1 border-b border-black text-xs italic py-1 px-2">
+                                                    Focus: {student.dailyGoal || '______________________________________'}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-4 shrink-0 no-print">
                                             {!isPrintMode && (
                                                 <>
-                                                    <button onClick={() => { setCurrentStudentId(student.id); setView('student-detail'); setActiveTab('goals'); }} className="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-bold transition"><Icon name="settings" size={16}/> Details</button>
-                                                    <button onClick={() => setDeleteConfirmation({ type: 'student', id: student.id, name: student.name })} className="text-slate-400 hover:text-red-400 flex items-center gap-1 text-sm font-bold transition"><Icon name="trash-2" size={16}/></button>
+                                                    <button onClick={() => { setCurrentStudentId(student.id); setView('student-detail'); setActiveTab('goals'); }} className="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-bold transition whitespace-nowrap"><Icon name="settings" size={16}/> Details</button>
+                                                    <button onClick={() => setDeleteConfirmation({ type: 'student', id: student.id, name: student.name })} className="text-slate-400 hover:text-red-400 flex items-center gap-1 text-sm font-bold transition whitespace-nowrap"><Icon name="trash-2" size={16}/></button>
                                                 </>
                                             )}
                                             {isPrintMode && <div className="text-sm font-bold">Date: _________________</div>}
@@ -417,13 +464,6 @@
                                     </div>
                                 </div>
                             ))}
-                            {activeStudents.length === 0 && !isAddingStudent && (
-                                <div className="py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                                    <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><Icon name="users" size={32}/></div>
-                                    <h3 className="text-xl font-bold text-slate-700">No students in this class</h3>
-                                    <p className="text-slate-500">Click "Add Student" to begin building your roster.</p>
-                                </div>
-                            )}
                         </div>
                     </div>
                 );
@@ -436,11 +476,9 @@
                 useEffect(() => {
                     const canvas = canvasRef.current;
                     if (!canvas) return;
-
                     const ctx = canvas.getContext('2d');
                     const dpr = window.devicePixelRatio || 1;
                     const rect = canvas.getBoundingClientRect();
-
                     canvas.width = rect.width * dpr;
                     canvas.height = rect.height * dpr;
                     ctx.scale(dpr, dpr);
@@ -450,7 +488,6 @@
                     const height = rect.height - padding.top - padding.bottom;
 
                     ctx.clearRect(0, 0, rect.width, rect.height);
-
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
                     ctx.lineWidth = 1;
                     for (let i = 0; i <= 3; i++) {
@@ -459,7 +496,6 @@
                         ctx.moveTo(padding.left, y);
                         ctx.lineTo(padding.left + width, y);
                         ctx.stroke();
-
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
                         ctx.font = '10px sans-serif';
                         ctx.fillText(4 - i, padding.left - 20, y + 4);
@@ -481,17 +517,12 @@
                                 lastPoint = null;
                                 return;
                             }
-
                             const x = reversedHistory.length > 1 
                                 ? padding.left + (width * (i / (reversedHistory.length - 1)))
                                 : padding.left + (width / 2);
                             const y = padding.top + (height * (1 - (score - 1) / 3));
-
-                            if (lastPoint === null) {
-                                ctx.moveTo(x, y);
-                            } else {
-                                ctx.lineTo(x, y);
-                            }
+                            if (lastPoint === null) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
                             lastPoint = { x, y };
                         });
                         ctx.stroke();
@@ -499,12 +530,10 @@
                         reversedHistory.forEach((entry, i) => {
                             const score = entry?.scores?.[category];
                             if (score === null || score === undefined) return;
-
                             const x = reversedHistory.length > 1 
                                 ? padding.left + (width * (i / (reversedHistory.length - 1)))
                                 : padding.left + (width / 2);
                             const y = padding.top + (height * (1 - (score - 1) / 3));
-                            
                             ctx.fillStyle = CATEGORY_COLORS[category];
                             ctx.beginPath();
                             ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -514,28 +543,6 @@
                             ctx.stroke();
                         });
                     });
-
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                    const labelCount = Math.min(reversedHistory.length, 5);
-                    if (reversedHistory.length > 0) {
-                        for (let i = 0; i < labelCount; i++) {
-                            const index = labelCount > 1 
-                                ? Math.floor(i * (reversedHistory.length - 1) / (labelCount - 1))
-                                : 0;
-                            const entry = reversedHistory[index];
-                            if (!entry) continue;
-                            const x = reversedHistory.length > 1 
-                                ? padding.left + (width * (index / (reversedHistory.length - 1)))
-                                : padding.left + (width / 2);
-                            
-                            ctx.save();
-                            ctx.translate(x, padding.top + height + 10);
-                            ctx.rotate(Math.PI / 4);
-                            ctx.fillText(entry.date || '', 0, 0);
-                            ctx.restore();
-                        }
-                    }
-
                 }, [reversedHistory]);
 
                 return (
@@ -556,7 +563,7 @@
                         <div className="relative w-full h-64">
                             {reversedHistory.length < 1 ? (
                                 <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm italic">
-                                    No records logged for this student yet.
+                                    No records logged yet.
                                 </div>
                             ) : (
                                 <canvas ref={canvasRef} className="w-full h-full" />
@@ -569,18 +576,12 @@
             const StudentDetailView = () => {
                 const student = students.find(s => s.id === currentStudentId);
                 if (!student) return null;
-
                 const history = student.history || [];
-                
                 return (
                     <div className="max-w-5xl mx-auto p-6">
                         <div className="flex justify-between items-center mb-6">
                             <button onClick={() => setView('students')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"><Icon name="arrow-left" size={18} /> Back to Class</button>
-                            <button onClick={() => exportStudentCSV(student)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition shadow-sm font-bold text-sm">
-                                <Icon name="download" size={16} /> Export Student CSV
-                            </button>
                         </div>
-                        
                         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8">
                             <div className="px-8 py-6 border-b border-slate-100 flex flex-wrap gap-4 justify-between items-end">
                                 <div>
@@ -592,7 +593,6 @@
                                     <button onClick={() => setActiveTab('history')} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Log History</button>
                                 </div>
                             </div>
-
                             <div className="p-8">
                                 {activeTab === 'goals' ? (
                                     <div className="grid grid-cols-1 gap-8">
@@ -619,7 +619,6 @@
                                         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                                             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                                                 <h3 className="font-bold text-slate-800">Score History</h3>
-                                                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{history.length} Logs</span>
                                             </div>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm">
@@ -627,6 +626,7 @@
                                                         <tr>
                                                             <th className="px-6 py-4 text-left">Date</th>
                                                             {CATEGORIES.map(c => <th key={c} className="px-4 py-4 text-center">{c}</th>)}
+                                                            <th className="px-6 py-4 text-left">Focus Snapshot</th>
                                                             <th className="px-6 py-4 text-right">Delete</th>
                                                         </tr>
                                                     </thead>
@@ -641,6 +641,7 @@
                                                                         </span>
                                                                     </td>
                                                                 ))}
+                                                                <td className="px-6 py-4 text-slate-500 italic max-w-xs truncate">{entry.note || '-'}</td>
                                                                 <td className="px-6 py-4 text-right">
                                                                     <button onClick={() => deleteHistoryEntry(student.id, entry.timestamp)} className="text-slate-300 hover:text-red-500 transition">
                                                                         <Icon name="trash-2" size={16} />
@@ -648,11 +649,6 @@
                                                                 </td>
                                                             </tr>
                                                         ))}
-                                                        {history.length === 0 && (
-                                                            <tr>
-                                                                <td colSpan={CATEGORIES.length + 2} className="px-6 py-12 text-center text-slate-400 italic">No historical data recorded for this student.</td>
-                                                            </tr>
-                                                        )}
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -675,7 +671,6 @@
                                     <button onClick={() => setView('classes')} className="bg-blue-600 p-1.5 rounded-lg shadow-sm hover:bg-blue-700 transition"><Icon name="graduation-cap" className="text-white" /></button>
                                     <span className="font-bold text-xl tracking-tight text-slate-800">EduMatrix Rubric</span>
                                 </div>
-                                <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest">Internal Use Only</div>
                             </div>
                         </nav>
                     )}
