@@ -194,27 +194,33 @@
             };
 
             const handleFileUpload = (event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const parsed = parseCSV(e.target.result);
-                    const dataMap = new Map();
-                    parsed.forEach(student => {
-                        const key = `${student['User ID']}-${student['Course Name']}`;
-                        dataMap.set(key, student);
-                    });
-                    if (!baselineData) {
-                        setBaselineData(dataMap);
-                        setCurrentData(dataMap);
-                    } else {
-                        setCurrentData(dataMap);
-                    }
-                    setLastUpdated(new Date().toISOString());
-                };
-                reader.readAsText(file);
-                event.target.value = ''; 
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const parsed = parseCSV(e.target.result);
+                const newDataMap = new Map();
+                parsed.forEach(student => {
+                    const key = `${student['User ID']}-${student['Course Name']}`;
+                    newDataMap.set(key, student);
+                });
+        
+                // If we already have data, the "current" data becomes the "baseline" 
+                // for this new snapshot.
+                if (currentData) {
+                    setBaselineData(currentData);
+                } else {
+                    // First time uploading? Set both to the same to start at 0% change
+                    setBaselineData(newDataMap);
+                }
+                
+                // Always set the new upload as the current data
+                setCurrentData(newDataMap);
+                setLastUpdated(new Date().toISOString());
             };
+            reader.readAsText(file);
+            event.target.value = ''; 
+        };
 
             const resetSession = () => {
                 if (confirm("Clear saved data?")) {
