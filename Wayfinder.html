@@ -3,66 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advisory Dashboard | Wayfinder</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Advisory Dashboard</title>
     <style>
         :root {
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --primary: #4f46e5;
-            --text: #1e293b;
-            --muted: #64748b;
-            --accent-1: #dcfce7; /* Belonging */
-            --accent-2: #fee2e2; /* Mastery */
+            --bg: #f8fafc; --card: #ffffff; --primary: #6366f1;
+            --monday: #f1f5f9; --belonging: #dcfce7; --independence: #e0f2fe; --mastery: #fef3c7; --generosity: #fce7f3;
         }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 30px; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 20px; color: #334155; }
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        .legend { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        .tag { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: #e2e8f0; }
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { margin: 0; color: #1e293b; }
 
+        /* Grid Setup */
         .calendar-grid { 
             display: grid; 
             grid-template-columns: repeat(5, 1fr); 
             gap: 12px; 
         }
-        .day-header { font-weight: 700; text-align: center; padding: 10px; color: var(--muted); text-transform: uppercase; font-size: 0.75rem; }
-        
-        .card { 
-            background: var(--card); 
-            border-radius: 12px; 
-            padding: 15px; 
-            min-height: 140px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-            border-top: 4px solid transparent;
-            transition: transform 0.2s;
-        }
-        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .date { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; color: var(--muted); }
-        .title { font-size: 0.9rem; font-weight: 600; line-height: 1.4; margin-bottom: 10px; flex-grow: 1; }
-        
-        .btn { 
-            display: inline-block; 
-            background: var(--primary); 
-            color: white; 
-            text-decoration: none; 
-            padding: 8px 12px; 
-            border-radius: 6px; 
-            font-size: 0.8rem; 
-            text-align: center;
-            font-weight: 600;
-        }
-        .btn:hover { opacity: 0.9; }
-        .no-school { background: #f1f5f9; color: #94a3b8; border: 1px dashed #cbd5e1; }
 
-        /* Responsive */
-        @media (max-width: 768px) {
+        /* Column Header Styling */
+        .col-header { text-align: center; margin-bottom: 10px; }
+        .pillar-tag { 
+            display: block; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; 
+            padding: 6px; border-radius: 6px 6px 0 0; letter-spacing: 1px; border-bottom: 2px solid rgba(0,0,0,0.05);
+        }
+        .day-name { 
+            display: block; background: #fff; padding: 5px; font-weight: 600; 
+            font-size: 0.9rem; border-radius: 0 0 6px 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        /* Card Styling */
+        .card { 
+            background: var(--card); border-radius: 10px; padding: 15px; min-height: 120px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column;
+            transition: transform 0.2s; border: 1px solid #e2e8f0;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .card.no-school { background: #f1f5f9; border: 1px dashed #cbd5e1; opacity: 0.7; }
+        
+        .date-badge { font-weight: 800; color: #94a3b8; font-size: 0.8rem; margin-bottom: 8px; }
+        .task-text { font-size: 0.9rem; font-weight: 600; line-height: 1.4; flex-grow: 1; color: #1e293b; }
+        
+        .link-btn { 
+            margin-top: 12px; display: block; background: var(--primary); color: white; 
+            text-align: center; text-decoration: none; padding: 8px; border-radius: 6px; 
+            font-size: 0.75rem; font-weight: 700; transition: opacity 0.2s;
+        }
+        .link-btn:hover { opacity: 0.9; }
+
+        /* Responsive stack for mobile */
+        @media (max-width: 850px) {
             .calendar-grid { grid-template-columns: 1fr; }
-            .day-header { display: none; }
-            .card { min-height: auto; }
+            .col-header { margin-top: 20px; }
         }
     </style>
 </head>
@@ -70,50 +63,64 @@
 
 <div class="container">
     <header>
-        <h1>🧭 Wayfinder Advisory</h1>
-        <p>March 2026 Schedule</p>
+        <h1>🧭 Advisory Calendar</h1>
     </header>
 
-    <div class="legend">
-        <span class="tag" style="background:#dcfce7">Belonging</span>
-        <span class="tag" style="background:#e0f2fe">Independence</span>
-        <span class="tag" style="background:#fef3c7">Mastery</span>
-        <span class="tag" style="background:#fce7f3">Generosity</span>
-    </div>
+    <div class="calendar-grid">
+        <div class="col-header">
+            <span class="pillar-tag" style="background: var(--monday)">Mindfulness</span>
+            <span class="day-name">Monday</span>
+        </div>
+        <div class="col-header">
+            <span class="pillar-tag" style="background: var(--belonging)">Belonging</span>
+            <span class="day-name">Tuesday</span>
+        </div>
+        <div class="col-header">
+            <span class="pillar-tag" style="background: var(--independence)">Independence</span>
+            <span class="day-name">Wednesday</span>
+        </div>
+        <div class="col-header">
+            <span class="pillar-tag" style="background: var(--mastery)">Mastery</span>
+            <span class="day-name">Thursday</span>
+        </div>
+        <div class="col-header">
+            <span class="pillar-tag" style="background: var(--generosity)">Generosity</span>
+            <span class="day-name">Friday</span>
+        </div>
 
-    <div class="calendar-grid" id="calendar">
-        <div class="day-header">Mon</div><div class="day-header">Tue</div>
-        <div class="day-header">Wed</div><div class="day-header">Thu</div>
-        <div class="day-header">Fri</div>
-
-        <div class="card"><div class="date">2</div><div class="title">Monday Meditation</div></div>
-        <div class="card" style="border-top-color:#dcfce7"><div class="date">3</div><div class="title">Physical Zones (Walking Activity)</div><a href="https://app.withwayfinder.com/library/d813599e-2046-42b3-ac70-e4dd5ae41e4e" class="btn" target="_blank">Open Link</a></div>
-        <div class="card" style="border-top-color:#e0f2fe"><div class="date">4</div><div class="title">Video & Journaling</div><a href="https://app.withwayfinder.com/student_library/8114934c-3654-4489-a5f6-8d9b8fcf7259" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">5</div><div class="title">ICEARY</div></div>
-        <div class="card"><div class="date">6</div><div class="title">ICEARY</div></div>
-
-        <div class="card no-school"><div class="date">9</div><div class="title">No School</div></div>
-        <div class="card"><div class="date">10</div><div class="title">"Monday" Meditation</div></div>
-        <div class="card" style="border-top-color:#fef3c7"><div class="date">11</div><div class="title">Time Check-In</div><a href="https://app.withwayfinder.com/student_library/7439dd3d-a59a-4f8a-9572-7b19f73302a5" class="btn" target="_blank">Open Link</a></div>
-        <div class="card" style="border-top-color:#fce7f3"><div class="date">12</div><div class="title">Practice Check-In (Pt 1)</div><a href="https://app.withwayfinder.com/library/0c99c70e-2a51-43a5-a9e9-7f8991f04662" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">13</div><div class="title">Friday Game Day 🎮</div></div>
-
-        <div class="card"><div class="date">16</div><div class="title">Monday Meditation</div></div>
-        <div class="card"><div class="date">17</div><div class="title">Interest Swap with Partner</div><a href="https://app.withwayfinder.com/library/9aaff21b-8810-4725-ab7b-d6d1ba33451c" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">18</div><div class="title">On Purpose</div><a href="https://app.withwayfinder.com/student_library/6173cdb2-b38a-4a41-9fd7-95dfa186d0db" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">19</div><div class="title">Practice Check-In (Pt 2)</div><a href="https://app.withwayfinder.com/library/0c99c70e-2a51-43a5-a9e9-7f8991f04662" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">20</div><div class="title">Friday Game Day 🎮</div></div>
-
-        <div class="card"><div class="date">23</div><div class="title">Monday Meditation</div></div>
-        <div class="card"><div class="date">24</div><div class="title">Rock, Paper, Scissors Battle</div><a href="https://app.withwayfinder.com/library/cc3242d3-fd87-4c85-a9df-84bb84cd316d" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">25</div><div class="title">What is Fear?</div><a href="https://app.withwayfinder.com/student_library/8f70cb02-3bf0-4e71-baff-f8fd045926ac" class="btn" target="_blank">Open Link</a></div>
-        <div class="card"><div class="date">26</div><div class="title">Future Me (6th-8th)</div><a href="https://app.withwayfinder.com/library/a3b79ab5-cbb9-406f-b814-589b6dca222f" class="btn" target="_blank">Open Link</a></div>
-        <div class="card no-school"><div class="date">27</div><div class="title">Early Release (No MS Advisory)</div></div>
-
-        <div class="card no-school"><div class="date">30</div><div class="title">Spring Break</div></div>
-        <div class="card no-school"><div class="date">31</div><div class="title">Spring Break</div></div>
+        <div id="calendar-root" style="display: contents;"></div>
     </div>
 </div>
+
+<script>
+    // Pointing to your new folder structure
+    fetch('./data/wayfinder.json')
+        .then(response => {
+            if (!response.ok) throw new Error("Could not find wayfinder.json in the data folder");
+            return response.json();
+        })
+        .then(data => {
+            const root = document.getElementById('calendar-root');
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = `card ${item.status || ''}`;
+                
+                const btn = item.link 
+                    ? `<a href="${item.link}" class="link-btn" target="_blank">View Lesson</a>` 
+                    : '';
+                
+                card.innerHTML = `
+                    <div class="date-badge">MARCH ${item.date}</div>
+                    <div class="task-text">${item.title}</div>
+                    ${btn}
+                `;
+                root.appendChild(card);
+            });
+        })
+        .catch(err => {
+            document.getElementById('calendar-root').innerHTML = `<p style="grid-column: 1 / -1; color: red; text-align: center;">Error: ${err.message}</p>`;
+        });
+</script>
 
 </body>
 </html>
