@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Interactive Algebra Tiles</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --pos-unit: #fbbf24; 
+            --neg-unit: #ef4444; 
+            --pos-x: #22c55e;    
+            --neg-x: #b91c1c;    
+            --pos-y: #3b82f6;    
+            --neg-y: #6366f1;    
+        }
+
+        body {
+            touch-action: none;
+            overflow: hidden;
+            background-color: #f1f5f9;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        .workspace {
+            height: calc(100vh - 280px); 
+            position: relative;
+            overflow: hidden;
+        }
+
+        .side-label {
+            position: absolute;
+            top: 60px;
+            font-weight: 800;
+            color: #e2e8f0;
+            font-size: 2.5rem;
+            pointer-events: none;
+            text-transform: uppercase;
+            width: 50%;
+            text-align: center;
+        }
+
+        .side-total-badge {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 8px 20px;
+            border-radius: 99px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            font-weight: 700;
+            font-size: 1.1rem;
+            border: 2px solid transparent;
+            z-index: 50;
+            white-space: nowrap;
+        }
+
+        #total-left-badge { border-color: #3b82f6; color: #1d4ed8; }
+        #total-right-badge { border-color: #10b981; color: #065f46; }
+
+        .divider {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #94a3b8;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .equals-sign {
+            background: #475569;
+            color: white;
+            padding: 12px;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 24px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .tile {
+            position: absolute;
+            cursor: grab;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            transition: transform 0.1s, opacity 0.2s;
+            touch-action: none;
+            z-index: 20;
+        }
+
+        .tile:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 100;
+        }
+
+        .tile-unit { width: 45px; height: 45px; font-size: 0.9rem; }
+        .tile-x { width: 40px; height: 100px; font-size: 0.9rem; }
+
+        .pos { border: 2px solid rgba(255,255,255,0.3); }
+        .neg { border: 2px dashed rgba(255,255,255,0.4); }
+
+        .toolbar-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 4px;
+        }
+
+        .toolbar-btn:active { transform: scale(0.95); }
+
+        @keyframes poof {
+            0% { transform: scale(1); opacity: 1; filter: blur(0px); }
+            100% { transform: scale(1.8); opacity: 0; filter: blur(4px); }
+        }
+        .canceling {
+            animation: poof 0.5s forwards cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #history-log {
+            height: 90px;
+            background: #ffffff;
+            border-top: 2px solid #e2e8f0;
+            overflow-y: auto;
+            padding: 10px 20px;
+            font-size: 0.85rem;
+            color: #334155;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .history-entry {
+            margin-bottom: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: #f8fafc;
+            border-left: 4px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-entry.balance { border-left-color: #10b981; background: #f0fdf4; }
+        .history-entry.simplify { border-left-color: #3b82f6; background: #eff6ff; }
+        .history-entry.info { border-left-color: #94a3b8; }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #2563eb; }
+        input:checked + .slider:before { transform: translateX(20px); }
+    </style>
+</head>
+<body class="bg-slate-50">
+
+    <header class="bg-white border-b p-3 shadow-sm flex justify-between items-center z-50 relative">
+        <div class="flex-1">
+            <h1 class="text-lg font-bold text-slate-800">Algebra Tiles Pro</h1>
+            <p id="equation-text" class="text-slate-800 font-mono text-xl font-bold truncate max-w-[400px]">0 = 0</p>
+        </div>
+        <div class="flex gap-3 items-center">
+            <div class="flex flex-col items-center">
+                <span class="text-[9px] font-bold uppercase text-slate-400 mb-1">Level</span>
+                <div class="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                    <span id="level-label" class="text-[10px] font-bold text-slate-600 px-1">1-Step</span>
+                    <label class="switch">
+                        <input type="checkbox" id="difficulty-toggle" onchange="updateLevelLabel()">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="level-label-2" class="text-[10px] font-bold text-slate-400 px-1">2-Step</span>
+                </div>
+            </div>
+            <button onclick="setMode('random')" id="mode-random" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-purple-700 transition-colors">New Problem</button>
+            <button onclick="clearCanvas();" class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold border hover:bg-slate-200">Reset</button>
+        </div>
+    </header>
+
+    <main class="workspace" id="workspace">
+        <div class="absolute left-0 top-0 bottom-0 w-1/2 overflow-hidden border-r border-slate-200">
+            <div class="side-label" style="width: 100%">Left</div>
+            <div id="total-left-badge" class="side-total-badge">0</div>
+        </div>
+
+        <div class="absolute right-0 top-0 bottom-0 w-1/2 overflow-hidden">
+            <div class="side-label" style="width: 100%">Right</div>
+            <div id="total-right-badge" class="side-total-badge">0</div>
+        </div>
+
+        <div class="divider">
+            <div class="equals-sign">=</div>
+        </div>
+    </main>
+
+    <div id="history-log">
+        <div class="text-[10px] uppercase font-bold text-slate-400 mb-2 tracking-wider flex justify-between">
+            <span>Student Action Log</span>
+            <span>Step-by-step progress</span>
+        </div>
+        <div id="history-content"></div>
+    </div>
+
+    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 shadow-lg z-50">
+        <div class="max-w-screen-xl mx-auto flex gap-4 items-center">
+            
+            <div class="flex flex-col items-center gap-1 border-r pr-4">
+                <span class="text-[9px] font-bold uppercase text-slate-400">Balance Both</span>
+                <label class="switch">
+                    <input type="checkbox" id="double-add-toggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="flex flex-1 justify-around items-center">
+                <div class="flex gap-2 items-center">
+                    <button onclick="handleAddTile('x', 1)" class="toolbar-btn bg-green-500 text-white w-10 h-14">
+                        <span class="text-xs font-bold">+x</span>
+                    </button>
+                    <button onclick="handleAddTile('x', -1)" class="toolbar-btn bg-red-700 text-white w-10 h-14">
+                        <span class="text-xs font-bold">-x</span>
+                    </button>
+                </div>
+
+                <div class="flex gap-2 items-center border-l pl-4">
+                    <button onclick="handleAddTile('unit', 1)" class="toolbar-btn bg-amber-400 text-white w-10 h-10">
+                        <span class="text-xs font-bold">+1</span>
+                    </button>
+                    <button onclick="handleAddTile('unit', -1)" class="toolbar-btn bg-red-500 text-white w-10 h-10">
+                        <span class="text-xs font-bold">-1</span>
+                    </button>
+                </div>
+                
+                <div class="flex flex-col items-center ml-4 px-4 border-l">
+                   <span class="text-[9px] font-bold uppercase text-slate-400 mb-1">Tools</span>
+                   <button onclick="clearCanvas()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded text-[10px] font-bold">Clear All</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const workspace = document.getElementById('workspace');
+        const equationText = document.getElementById('equation-text');
+        const totalLeftBadge = document.getElementById('total-left-badge');
+        const totalRightBadge = document.getElementById('total-right-badge');
+        const doubleAddToggle = document.getElementById('double-add-toggle');
+        const difficultyToggle = document.getElementById('difficulty-toggle');
+        const historyContent = document.getElementById('history-content');
+        const historyLog = document.getElementById('history-log');
+
+        let tiles = [];
+        let currentId = 0;
+        let activeTile = null;
+        let offsetX, offsetY;
+
+        const TILE_CONFIG = {
+            unit: { class: 'tile-unit', label: '1', posColor: 'var(--pos-unit)', negColor: 'var(--neg-unit)', width: 45, height: 45 },
+            x: { class: 'tile-x', label: 'x', posColor: 'var(--pos-x)', negColor: 'var(--neg-x)', width: 40, height: 100 }
+        };
+
+        function addLog(message, category = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `history-entry ${category}`;
+            
+            let icon = '📝';
+            if (category === 'balance') icon = '⚖️';
+            if (category === 'simplify') icon = '✨';
+            
+            entry.innerHTML = `<span class="text-lg">${icon}</span> <span>${message}</span>`;
+            historyContent.appendChild(entry);
+            historyLog.scrollTop = historyLog.scrollHeight;
+        }
+
+        function updateLevelLabel() {
+            const isTwoStep = difficultyToggle.checked;
+            document.getElementById('level-label').classList.toggle('text-slate-600', !isTwoStep);
+            document.getElementById('level-label').classList.toggle('text-slate-400', isTwoStep);
+            document.getElementById('level-label-2').classList.toggle('text-slate-600', isTwoStep);
+            document.getElementById('level-label-2').classList.toggle('text-slate-400', !isTwoStep);
+        }
+
+        function setMode(mode) {
+            tiles.forEach(t => t.element.remove());
+            tiles = [];
+            historyContent.innerHTML = '';
+            
+            if (mode === 'random') {
+                generateRandomProblem();
+            } else {
+                addLog(`Basic setup loaded. Move tiles to explore zero pairs.`, 'info');
+                const mid = window.innerWidth / 2;
+                createTile('x', 1, mid * 0.25, 200, false);
+                createTile('unit', 1, mid * 0.5, 200, false);
+                for(let i=0; i<5; i++) {
+                   createTile('unit', 1, mid + 50 + (i%2)*60, 200 + Math.floor(i/2)*60, false);
+                }
+            }
+            updateUI();
+        }
+
+        function generateRandomProblem() {
+            const mid = window.innerWidth / 2;
+            const isTwoStep = difficultyToggle.checked;
+
+            if (isTwoStep) {
+                // ax + b = c
+                const a = Math.floor(Math.random() * 2) + 2; // 2 or 3
+                const xVal = Math.floor(Math.random() * 3) + 1; // 1-3 to keep tile counts low
+                const b = Math.floor(Math.random() * 4) + 1; // 1-4
+                const c = a * xVal + b;
+
+                addLog(`<strong>2-Step Challenge:</strong> Solve <strong>${a}x + ${b} = ${c}</strong>`, 'info');
+                
+                const leftStart = mid * 0.1;
+                // Place x's in a neat row
+                for(let i=0; i<a; i++) createTile('x', 1, leftStart + i*45, 140, false);
+                // Place units in a grid next to x's
+                const unitStartX = leftStart + (a * 45) + 10;
+                for(let i=0; i<b; i++) {
+                    createTile('unit', 1, unitStartX + (Math.floor(i/3))*50, 140 + (i % 3) * 50, false);
+                }
+
+                const rightStart = mid + 30;
+                for(let i=0; i<c; i++) {
+                    const cols = mid < 600 ? 2 : 3;
+                    createTile('unit', 1, rightStart + (i % cols) * 50, 100 + Math.floor(i / cols) * 50, false);
+                }
+            } else {
+                // Simple 1-step: x + b = c
+                const xVal = Math.floor(Math.random() * 5) + 2;
+                const b = Math.floor(Math.random() * 4) + 1;
+                const c = xVal + b;
+                
+                addLog(`<strong>1-Step Challenge:</strong> Solve <strong>x + ${b} = ${c}</strong>`, 'info');
+                
+                createTile('x', 1, mid * 0.2, 150, false);
+                const unitStartX = mid * 0.2 + 50;
+                for(let i=0; i<b; i++) {
+                    createTile('unit', 1, unitStartX, 100 + i*50, false);
+                }
+                
+                const rightStart = mid + 40;
+                for(let i=0; i<c; i++) {
+                    createTile('unit', 1, rightStart + (i%3)*50, 100 + Math.floor(i/3)*50, false);
+                }
+            }
+        }
+
+        function handleAddTile(type, value) {
+            const mid = window.innerWidth / 2;
+            const double = doubleAddToggle.checked;
+            const config = TILE_CONFIG[type];
+            const yPos = 60; 
+
+            const sign = value > 0 ? '+' : '-';
+            const label = config.label;
+
+            if (double) {
+                addLog(`Balanced Action: Added <strong>${sign}${label}</strong> to <strong>both sides</strong>.`, 'balance');
+                createTile(type, value, mid * 0.15, yPos, false);
+                createTile(type, value, mid + 20, yPos, false);
+            } else {
+                addLog(`Added <strong>${sign}${label}</strong>. Note: The equation is now unbalanced!`, 'info');
+                createTile(type, value, mid - 100, yPos, false);
+            }
+            updateUI();
+        }
+
+        function createTile(type, value, x, y, logIt = true) {
+            const config = TILE_CONFIG[type];
+            const id = `tile-${currentId++}`;
+            const div = document.createElement('div');
+            
+            // Boundary Safety
+            const maxX = window.innerWidth - config.width - 20;
+            const maxY = workspace.offsetHeight - config.height - 20;
+            const safeX = Math.max(20, Math.min(x, maxX));
+            const safeY = Math.max(20, Math.min(y, maxY));
+
+            div.id = id;
+            div.className = `tile ${config.class} ${value > 0 ? 'pos' : 'neg'}`;
+            div.style.backgroundColor = value > 0 ? config.posColor : config.negColor;
+            div.style.left = safeX + 'px';
+            div.style.top = safeY + 'px';
+            div.innerHTML = (value > 0 ? '+' : '-') + config.label;
+            
+            div.addEventListener('mousedown', startDrag);
+            div.addEventListener('touchstart', startDrag, { passive: false });
+
+            workspace.appendChild(div);
+            tiles.push({ id, type, value, element: div });
+            
+            if (logIt) {
+                const sign = value > 0 ? '+' : '-';
+                addLog(`Manual addition: <strong>${sign}${config.label}</strong> tile.`, 'info');
+            }
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            const client = e.type === 'touchstart' ? e.touches[0] : e;
+            activeTile = tiles.find(t => t.id === (e.target.id || e.target.parentElement.id));
+            if (!activeTile) return;
+
+            const rect = activeTile.element.getBoundingClientRect();
+            offsetX = client.clientX - rect.left;
+            offsetY = client.clientY - rect.top;
+
+            window.addEventListener('mousemove', drag);
+            window.addEventListener('touchmove', drag, { passive: false });
+            window.addEventListener('mouseup', endDrag);
+            window.addEventListener('touchend', endDrag);
+        }
+
+        function drag(e) {
+            if (!activeTile) return;
+            const client = e.type === 'touchmove' ? e.touches[0] : e;
+            
+            const workspaceRect = workspace.getBoundingClientRect();
+            let newX = client.clientX - offsetX;
+            let newY = client.clientY - offsetY - workspaceRect.top;
+
+            const tileRect = activeTile.element.getBoundingClientRect();
+            newX = Math.max(0, Math.min(newX, workspaceRect.width - tileRect.width));
+            newY = Math.max(0, Math.min(newY, workspaceRect.height - tileRect.height));
+
+            activeTile.element.style.left = newX + 'px';
+            activeTile.element.style.top = newY + 'px'; 
+
+            checkCollisions(activeTile);
+        }
+
+        function checkCollisions(tile) {
+            const r1 = tile.element.getBoundingClientRect();
+            for (let other of tiles) {
+                if (other.id === tile.id || other.type !== tile.type || other.value === tile.value) continue;
+                const r2 = other.element.getBoundingClientRect();
+                const overlap = !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
+                if (overlap) {
+                    cancelPair(tile, other);
+                    break;
+                }
+            }
+        }
+
+        function cancelPair(t1, t2) {
+            const label = TILE_CONFIG[t1.type].label;
+            addLog(`Simplified: A <strong>Zero Pair</strong> (1 and -1) was neutralized.`, 'simplify');
+            t1.element.classList.add('canceling');
+            t2.element.classList.add('canceling');
+            tiles = tiles.filter(t => t.id !== t1.id && t.id !== t2.id);
+            if (activeTile && (activeTile.id === t1.id || activeTile.id === t2.id)) activeTile = null;
+            setTimeout(() => {
+                t1.element.remove();
+                t2.element.remove();
+                updateUI();
+            }, 500);
+        }
+
+        function endDrag() {
+            activeTile = null;
+            window.removeEventListener('mousemove', drag);
+            window.removeEventListener('touchmove', drag);
+            updateUI();
+        }
+
+        function updateUI() {
+            const mid = window.innerWidth / 2;
+            let L = { x: 0, u: 0 }, R = { x: 0, u: 0 };
+
+            tiles.forEach(t => {
+                const rect = t.element.getBoundingClientRect();
+                const side = (rect.left + rect.width/2) < mid ? L : R;
+                if (t.type === 'x') side.x += t.value;
+                else side.u += t.value;
+            });
+
+            const format = (s) => {
+                let p = [];
+                if (s.x !== 0) {
+                    let coef = s.x === 1 ? "" : s.x === -1 ? "-" : s.x;
+                    p.push(`${coef}x`);
+                }
+                if (s.u !== 0) p.push(`${s.u > 0 && p.length ? '+' : ''}${s.u}`);
+                return p.length ? p.join(' ') : '0';
+            };
+
+            const leftStr = format(L);
+            const rightStr = format(R);
+            equationText.innerText = `${leftStr} = ${rightStr}`;
+            totalLeftBadge.innerText = leftStr;
+            totalRightBadge.innerText = rightStr;
+        }
+
+        function clearCanvas() {
+            tiles.forEach(t => t.element.remove());
+            tiles = [];
+            addLog("Workspace cleared.", 'info');
+            updateUI();
+        }
+
+        window.onload = () => setMode('default');
+        window.addEventListener('resize', updateUI);
+    </script>
+</body>
+</html>
