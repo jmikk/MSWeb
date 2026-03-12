@@ -443,6 +443,7 @@
             let tiles = [];
             let currentId = 0;
             let activeTile = null;
+            let initialSide = null; // Track which side the drag started on
             let selectedTileForAction = null;
             let offsetX = 0, offsetY = 0;
             let dragStarted = false;
@@ -475,7 +476,7 @@
                 if (!modeToggle.checked) {
                     addLog("Switched to Setup Mode. Delete tiles by dragging off-screen.", "info");
                 } else {
-                    addLog("Switched to Solving Mode. Current setup saved as problem to solve.", "info");
+                    addLog("Switched to Solving Mode. Tiles are now constrained to their side.", "info");
                     calculateTargetXFromLayout();
                 }
             };
@@ -758,9 +759,15 @@
                 if (!activeTile || activeTile.isCanceling) return;
                 dragStarted = false;
                 isOffScreen = false;
+                
                 const rect = activeTile.element.getBoundingClientRect();
                 offsetX = client.clientX - rect.left;
                 offsetY = client.clientY - rect.top;
+
+                // Determine initial side for barrier logic
+                const mid = window.innerWidth / 2;
+                initialSide = (rect.left + rect.width / 2) < mid ? 'L' : 'R';
+
                 window.addEventListener('mousemove', drag);
                 window.addEventListener('touchmove', drag, { passive: false });
                 window.addEventListener('mouseup', endDrag);
@@ -773,12 +780,32 @@
                 contextMenu.style.display = 'none';
                 const client = e.type === 'touchmove' ? e.touches[0] : e;
                 const wRect = workspace.getBoundingClientRect();
+                
                 let nX = client.clientX - offsetX - wRect.left;
                 let nY = client.clientY - offsetY - wRect.top;
-                activeTile.element.style.left = nX + 'px';
-                activeTile.element.style.top = nY + 'px'; 
-                if (!modeToggle.checked) {
-                    if (nX + 40 < 0 || nX > wRect.width || nY + 40 < 0 || nY > wRect.height) {
+
+                const tileRect = activeTile.element.getBoundingClientRect();
+                const tW = tileRect.width;
+                const tH = tileRect.height;
+                const mid = wRect.width / 2;
+
+                // Constraint Logic
+                if (modeToggle.checked) {
+                    // Vertical Boundaries
+                    nY = Math.max(0, Math.min(nY, wRect.height - tH));
+                    
+                    // Horizontal Side-Locked Boundaries
+                    if (initialSide === 'L') {
+                        // Stay on Left: 0 to Middle
+                        nX = Math.max(0, Math.min(nX, mid - tW - 2)); 
+                    } else {
+                        // Stay on Right: Middle to End
+                        nX = Math.max(mid + 2, Math.min(nX, wRect.width - tW));
+                    }
+                    isOffScreen = false;
+                } else {
+                    // In setup mode, allow dragging anywhere and off-screen to delete
+                    if (nX + tW < 0 || nX > wRect.width || nY + tH < 0 || nY > wRect.height) {
                         isOffScreen = true;
                         workspace.classList.add('dragging-off');
                     } else {
@@ -786,6 +813,10 @@
                         workspace.classList.remove('dragging-off');
                     }
                 }
+
+                activeTile.element.style.left = nX + 'px';
+                activeTile.element.style.top = nY + 'px'; 
+                
                 checkCollisions(activeTile);
             }
 
@@ -819,6 +850,7 @@
                     addLog(`Removed tile.`, 'info');
                 }
                 activeTile = null;
+                initialSide = null;
                 isOffScreen = false;
                 workspace.classList.remove('dragging-off');
                 window.removeEventListener('mousemove', drag);
