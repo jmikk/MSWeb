@@ -96,7 +96,7 @@
             font-weight: bold;
             border-radius: 4px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.15);
-            transition: transform 0.1s, opacity 0.2s;
+            transition: transform 0.1s, opacity 0.2s, background-color 0.3s;
             touch-action: none;
             z-index: 20;
         }
@@ -343,8 +343,8 @@
     <div id="multiply-dialog">
         <div class="bg-white p-6 rounded-xl shadow-2xl w-80 text-center">
             <h3 class="font-bold text-slate-800 mb-2">Multiply Both Sides</h3>
-            <p class="text-sm text-slate-500 mb-4">Enter factor to multiply the whole equation by:</p>
-            <input type="number" id="multiply-factor-input" min="2" max="10" value="2" 
+            <p class="text-sm text-slate-500 mb-4">Enter factor (use negative to flip signs):</p>
+            <input type="number" id="multiply-factor-input" step="1" value="2" 
                 class="w-full border-2 border-slate-200 rounded-lg p-3 text-center text-xl font-bold focus:border-indigo-500 outline-none mb-4">
             <div class="flex gap-2">
                 <button onclick="closeMultiplyPrompt()" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg font-bold">Cancel</button>
@@ -356,8 +356,8 @@
     <div id="divide-dialog">
         <div class="bg-white p-6 rounded-xl shadow-2xl w-80 text-center">
             <h3 class="font-bold text-slate-800 mb-2">Divide Both Sides</h3>
-            <p class="text-sm text-slate-500 mb-4">Divisor (leaves fractional pieces behind):</p>
-            <input type="number" id="divide-factor-input" min="2" max="10" value="2" 
+            <p class="text-sm text-slate-500 mb-4">Divisor (use negative to flip signs):</p>
+            <input type="number" id="divide-factor-input" step="1" value="2" 
                 class="w-full border-2 border-slate-200 rounded-lg p-3 text-center text-xl font-bold focus:border-purple-500 outline-none mb-4">
             <div class="flex gap-2">
                 <button onclick="closeDividePrompt()" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg font-bold">Cancel</button>
@@ -422,547 +422,456 @@
     </footer>
 
     <script>
-        const workspace = document.getElementById('workspace');
-        const equationText = document.getElementById('equation-text');
-        const totalLeftBadge = document.getElementById('total-left-badge');
-        const totalRightBadge = document.getElementById('total-right-badge');
-        const modeToggle = document.getElementById('mode-toggle');
-        const toggleLabel = document.getElementById('toggle-label');
-        const historyContent = document.getElementById('history-content');
-        const historyLog = document.getElementById('history-log');
-        const contextMenu = document.getElementById('context-menu');
-        const inputDialog = document.getElementById('input-dialog');
-        const multiplyDialog = document.getElementById('multiply-dialog');
-        const divideDialog = document.getElementById('divide-dialog');
-        const customSplitInput = document.getElementById('custom-split-input');
-        const multiplyFactorInput = document.getElementById('multiply-factor-input');
-        const divideFactorInput = document.getElementById('divide-factor-input');
-        const pointsDisplay = document.getElementById('points');
+        (function() {
+            const workspace = document.getElementById('workspace');
+            const equationText = document.getElementById('equation-text');
+            const totalLeftBadge = document.getElementById('total-left-badge');
+            const totalRightBadge = document.getElementById('total-right-badge');
+            const modeToggle = document.getElementById('mode-toggle');
+            const toggleLabel = document.getElementById('toggle-label');
+            const historyContent = document.getElementById('history-content');
+            const historyLog = document.getElementById('history-log');
+            const contextMenu = document.getElementById('context-menu');
+            const inputDialog = document.getElementById('input-dialog');
+            const multiplyDialog = document.getElementById('multiply-dialog');
+            const divideDialog = document.getElementById('divide-dialog');
+            const customSplitInput = document.getElementById('custom-split-input');
+            const multiplyFactorInput = document.getElementById('multiply-factor-input');
+            const divideFactorInput = document.getElementById('divide-factor-input');
+            const pointsDisplay = document.getElementById('points');
 
-        let tiles = [];
-        let currentId = 0;
-        let activeTile = null;
-        let selectedTileForAction = null;
-        let offsetX, offsetY;
-        let dragStarted = false;
-        let isOffScreen = false;
-        
-        let score = 0;
-        let targetX = { num: 0, den: 1 }; // For verification
-        let currentEquationStatus = { L: null, R: null };
-
-        const TILE_CONFIG = {
-            unit: { class: 'tile-unit', label: '1', posColor: 'var(--pos-unit)', negColor: 'var(--neg-unit)', width: 45, height: 45 },
-            x: { class: 'tile-x', label: 'x', posColor: 'var(--pos-x)', negColor: 'var(--neg-x)', width: 40, height: 100 }
-        };
-
-        function gcd(a, b) {
-            return b ? gcd(b, a % b) : a;
-        }
-
-        function simplifyFraction(num, den) {
-            if (den === 0) return { num, den }; 
-            const common = Math.abs(gcd(num, den));
-            let n = num / common;
-            let d = den / common;
-            if (d < 0) { n = -n; d = -d; }
-            return { num: n, den: d };
-        }
-
-        function updateModeLabel() {
-            toggleLabel.innerText = modeToggle.checked ? "Solving Mode" : "Setup Mode";
-            if (!modeToggle.checked) {
-                addLog("Switched to Setup Mode. Delete tiles by dragging off-screen.", "info");
-            } else {
-                addLog("Switched to Solving Mode. Current setup saved as problem to solve.", "info");
-                // Calculate answer for custom problem
-                calculateTargetXFromLayout();
-            }
-        }
-
-        function calculateTargetXFromLayout() {
-            // For custom problems, we assume the current layout is the "original problem"
-            // To find the answer, we solve current L = R for x.
-            // L_x * x + L_u = R_x * x + R_u
-            // x * (L_x - R_x) = R_u - L_u
-            // x = (R_u - L_u) / (L_x - R_x)
+            let tiles = [];
+            let currentId = 0;
+            let activeTile = null;
+            let selectedTileForAction = null;
+            let offsetX = 0, offsetY = 0;
+            let dragStarted = false;
+            let isOffScreen = false;
             
-            const state = currentEquationStatus;
-            if (!state.L || !state.R) return;
+            let score = 0;
+            let targetX = { num: 0, den: 1 }; 
+            let currentEquationStatus = { L: null, R: null };
 
-            const netXNum = state.L.x.num * state.R.x.den - state.R.x.num * state.L.x.den;
-            const netXDen = state.L.x.den * state.R.x.den;
-            
-            const netUNum = state.R.u.num * state.L.u.den - state.L.u.num * state.R.u.den;
-            const netUDen = state.R.u.den * state.L.u.den;
-
-            // Result: x = (netUNum / netUDen) / (netXNum / netXDen)
-            // x = (netUNum * netXDen) / (netUDen * netXNum)
-            const resultNum = netUNum * netXDen;
-            const resultDen = netUDen * netXNum;
-
-            if (resultDen === 0) {
-                targetX = null; // No unique solution
-            } else {
-                targetX = simplifyFraction(resultNum, resultDen);
-            }
-        }
-
-        function addLog(message, category = 'info') {
-            const entry = document.createElement('div');
-            entry.className = `history-entry ${category}`;
-            let icon = '📝';
-            if (category === 'balance' || category === 'purple' || category === 'simplify') icon = '⚖️';
-            if (category === 'success') icon = '🎉';
-            if (category === 'error') icon = '❌';
-            entry.innerHTML = `<span class="text-lg">${icon}</span> <span>${message}</span>`;
-            historyContent.appendChild(entry);
-            historyLog.scrollTop = historyLog.scrollHeight;
-        }
-
-        function checkAnswer() {
-            const state = currentEquationStatus;
-            if (!state.L || !state.R) return;
-
-            // Step 1: Check if sides are simplified to "x = [value]"
-            // This means one side is exactly 1x (num:1, den:1) and 0 units.
-            // And the other side is exactly 0x and some units.
-            
-            const leftIsX = state.L.x.num === 1 && state.L.x.den === 1 && state.L.u.num === 0;
-            const leftIsUnits = state.L.x.num === 0 && state.L.u.num !== 0;
-            
-            const rightIsX = state.R.x.num === 1 && state.R.x.den === 1 && state.R.u.num === 0;
-            const rightIsUnits = state.R.x.num === 0 && state.R.u.num !== 0;
-
-            let currentXVal = null;
-
-            if (leftIsX && rightIsUnits) {
-                currentXVal = state.R.u;
-            } else if (rightIsX && leftIsUnits) {
-                currentXVal = state.L.u;
-            }
-
-            if (!currentXVal) {
-                addLog("Keep going! You need to isolate a single <strong>+x</strong> on one side by itself.", "error");
-                return;
-            }
-
-            // Step 2: Compare to targetX
-            if (targetX && currentXVal.num === targetX.num && currentXVal.den === targetX.den) {
-                score++;
-                pointsDisplay.innerText = score;
-                addLog(`Correct! <strong>x = ${targetX.den === 1 ? targetX.num : targetX.num + '/' + targetX.den}</strong>. You earned a point!`, "success");
-                // Reset for next problem
-                setTimeout(() => {
-                    generateProblem(Math.random() > 0.5 ? 2 : 1);
-                }, 2000);
-            } else {
-                addLog("The logic is sound but that's not the correct value for x based on the starting problem.", "error");
-            }
-        }
-
-        function generateProblem(steps) {
-            clearCanvas();
-            const mid = window.innerWidth / 2;
-            const centerL = mid * 0.5;
-            const centerR = mid + (mid * 0.5);
-            
-            const types = ['add', 'sub', 'mul', 'div'];
-            const chosenType = types[Math.floor(Math.random() * types.length)];
-            
-            let problemStr = "";
-            let logTarget = document.getElementById('log-target');
-
-            if (steps === 1) {
-                const val = Math.floor(Math.random() * 4) + 1;
-                const result = Math.floor(Math.random() * 5) + 1;
-                
-                switch(chosenType) {
-                    case 'add':
-                        targetX = { num: result - val, den: 1 };
-                        problemStr = `x + ${val} = ${result}`;
-                        createTile('x', 1, centerL - 50, 100, false);
-                        for(let i=0; i<val; i++) createTile('unit', 1, centerL + (i%2)*55, 60 + Math.floor(i/2)*55, false);
-                        for(let i=0; i<result; i++) createTile('unit', 1, centerR - 50 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
-                        break;
-                    case 'sub':
-                        targetX = { num: result + val, den: 1 };
-                        problemStr = `x - ${val} = ${result}`;
-                        createTile('x', 1, centerL - 50, 100, false);
-                        for(let i=0; i<val; i++) createTile('unit', -1, centerL + (i%2)*55, 60 + Math.floor(i/2)*55, false);
-                        for(let i=0; i<result; i++) createTile('unit', 1, centerR - 50 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
-                        break;
-                    case 'mul':
-                        const coefMul = Math.floor(Math.random() * 2) + 2; 
-                        const xValMul = Math.floor(Math.random() * 3) + 1;
-                        const totalUnits = coefMul * xValMul;
-                        targetX = { num: xValMul, den: 1 };
-                        problemStr = `${coefMul}x = ${totalUnits}`;
-                        for(let i=0; i<coefMul; i++) createTile('x', 1, centerL - 20, 40 + (i*110), false);
-                        for(let i=0; i<totalUnits; i++) createTile('unit', 1, centerR - 50 + (i%3)*55, 60 + Math.floor(i/3)*55, false);
-                        break;
-                    case 'div':
-                        const denomDiv = Math.floor(Math.random() * 3) + 2;
-                        const resUnitsDiv = Math.floor(Math.random() * 3) + 1;
-                        targetX = { num: resUnitsDiv * denomDiv, den: 1 };
-                        problemStr = `x/${denomDiv} = ${resUnitsDiv}`;
-                        createTile('x', 1, centerL - 20, 100, false, denomDiv);
-                        for(let i=0; i<resUnitsDiv; i++) createTile('unit', 1, centerR - 50 + (i*55), 100, false);
-                        break;
-                }
-            } else {
-                const coef = Math.floor(Math.random() * 2) + 2;
-                const constant = Math.floor(Math.random() * 3) + 1;
-                const xVal = Math.floor(Math.random() * 3) + 1;
-                const result = coef * xVal + constant;
-                
-                targetX = { num: xVal, den: 1 };
-                problemStr = `${coef}x + ${constant} = ${result}`;
-                for(let i=0; i<coef; i++) createTile('x', 1, centerL - 60, 40 + (i*110), false);
-                for(let i=0; i<constant; i++) createTile('unit', 1, centerL + 10 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
-                for(let i=0; i<result; i++) createTile('unit', 1, centerR - 60 + (i%3)*55, 60 + Math.floor(i/3)*55, false);
-            }
-
-            logTarget.innerText = problemStr;
-            addLog(`Generated ${steps}-step problem: <strong>${problemStr}</strong>`, 'info');
-            updateUI();
-        }
-
-        function handleAddTile(type, value) {
-            const mid = window.innerWidth / 2;
-            const isSolving = modeToggle.checked;
-            const label = TILE_CONFIG[type].label;
-            const sign = value > 0 ? '+' : '-';
-            if (isSolving) {
-                addLog(`Balanced side: Added <strong>${sign}${label}</strong> to <strong>both sides</strong>.`, 'balance');
-                createTile(type, value, mid * 0.25, 80, false);
-                createTile(type, value, mid + (mid * 0.25), 80, false);
-            } else {
-                addLog(`Setup: Added <strong>${sign}${label}</strong> to workspace.`, 'info');
-                createTile(type, value, mid - 100, 80, false);
-            }
-            updateUI();
-        }
-
-        function createTile(type, value, x, y, logIt = true, denom = 1) {
-            const config = TILE_CONFIG[type];
-            const id = `tile-${currentId++}`;
-            const div = document.createElement('div');
-            
-            div.id = id;
-            div.className = `tile ${config.class} ${value > 0 ? 'pos' : 'neg'}`;
-            div.style.backgroundColor = value > 0 ? config.posColor : config.negColor;
-            div.style.left = x + 'px';
-            div.style.top = y + 'px';
-            
-            const sign = value > 0 ? '+' : '-';
-            if (denom > 1) {
-                div.innerHTML = `<span class='text-[10px]'>${sign}${config.label}</span><div class='split-line'></div><span class='text-[10px]'>${denom}</span>`;
-            } else {
-                div.innerHTML = sign + config.label;
-            }
-            
-            div.addEventListener('mousedown', startDrag);
-            div.addEventListener('touchstart', startDrag, { passive: false });
-            div.addEventListener('click', (e) => { if (!dragStarted) showContextMenu(e, id); });
-
-            workspace.appendChild(div);
-            tiles.push({ id, type, value, element: div, denom, isCanceling: false });
-            return tiles[tiles.length - 1];
-        }
-
-        function showContextMenu(e, tileId) {
-            e.stopPropagation();
-            selectedTileForAction = tiles.find(t => t.id === tileId);
-            if (!selectedTileForAction || selectedTileForAction.isCanceling) return;
-
-            const rect = selectedTileForAction.element.getBoundingClientRect();
-            const wRect = workspace.getBoundingClientRect();
-            
-            let posX = rect.left - wRect.left;
-            let posY = rect.bottom - wRect.top + 5;
-
-            const menuWidth = 160;
-            const menuHeight = 120;
-            if (posX + menuWidth > wRect.width) posX = wRect.width - menuWidth - 10;
-            if (posY + menuHeight > wRect.height) posY = rect.top - wRect.top - menuHeight - 5;
-
-            contextMenu.style.left = Math.max(10, posX) + 'px';
-            contextMenu.style.top = Math.max(10, posY) + 'px';
-            contextMenu.style.display = 'flex';
-            document.getElementById('menu-title').innerText = selectedTileForAction.type === 'x' ? 'Variable Options' : 'Unit Options';
-        }
-
-        function splitTile(parts) {
-            if (!selectedTileForAction) return;
-            const t = selectedTileForAction;
-            const x = parseFloat(t.element.style.left), y = parseFloat(t.element.style.top);
-            const newDenom = t.denom * parts;
-            addLog(`Split <strong>${t.type === 'x' ? 'x' : '1'}</strong> into <strong>${parts}</strong> pieces.`, 'info');
-            const oldId = t.id;
-            tiles = tiles.filter(item => item.id !== oldId);
-            t.element.remove();
-            for (let i = 0; i < parts; i++) {
-                createTile(t.type, t.value, x + (i * 12), y + (i * 12), false, newDenom);
-            }
-            contextMenu.style.display = 'none';
-            selectedTileForAction = null;
-            updateUI();
-        }
-
-        function applyMultiplyBothSides() {
-            const factor = parseInt(multiplyFactorInput.value);
-            if (isNaN(factor) || factor < 2) return;
-            addLog(`Multiplied <strong>both sides</strong> by <strong>${factor}</strong>.`, 'balance');
-            
-            const mid = window.innerWidth / 2;
-            const oldTiles = [...tiles];
-            
-            oldTiles.forEach(tile => {
-                const x = parseFloat(tile.element.style.left);
-                const y = parseFloat(tile.element.style.top);
-                
-                if (tile.denom > 1 && factor % tile.denom === 0) {
-                    const remainingFactor = factor / tile.denom;
-                    tile.denom = 1;
-                    const sign = tile.value > 0 ? '+' : '-';
-                    tile.element.innerHTML = sign + TILE_CONFIG[tile.type].label;
-                    for (let i = 1; i < remainingFactor; i++) {
-                        createTile(tile.type, tile.value, x + (i * 15), y + (i * 15), false, 1);
-                    }
-                } else {
-                    for (let i = 1; i < factor; i++) {
-                        createTile(tile.type, tile.value, x + (i * 15), y + (i * 15), false, tile.denom);
-                    }
-                }
-            });
-            
-            closeMultiplyPrompt();
-            updateUI();
-        }
-
-        function applyDivideBothSides() {
-            const factor = parseInt(divideFactorInput.value);
-            if (isNaN(factor) || factor < 2) return;
-            
-            addLog(`Divided <strong>both sides</strong> by <strong>${factor}</strong>.`, 'simplify');
-            
-            tiles.forEach(t => {
-                t.denom = t.denom * factor;
-                const sign = t.value > 0 ? '+' : '-';
-                const config = TILE_CONFIG[t.type];
-                t.element.innerHTML = `<span class='text-[10px]'>${sign}${config.label}</span><div class='split-line'></div><span class='text-[10px]'>${t.denom}</span>`;
-            });
-
-            regroupFractionalTiles();
-            closeDividePrompt();
-            updateUI();
-        }
-
-        function regroupFractionalTiles() {
-            const mid = window.innerWidth / 2;
-            const groupings = {};
-            
-            tiles.forEach(t => {
-                const side = (parseFloat(t.element.style.left) + 20) < mid ? 'L' : 'R';
-                const key = `${side}_${t.type}_${t.value}_${t.denom}`;
-                if (!groupings[key]) groupings[key] = [];
-                groupings[key].push(t);
-            });
-
-            let anyRegrouped = false;
-
-            for (const key in groupings) {
-                const group = groupings[key];
-                if (group.length === 0) continue;
-                
-                const t0 = group[0];
-                const d = t0.denom;
-                
-                if (d > 1 && group.length >= d) {
-                    const wholesToMake = Math.floor(group.length / d);
-                    const remainder = group.length % d;
-                    
-                    const baseTile = group[0];
-                    const x = parseFloat(baseTile.element.style.left);
-                    const y = parseFloat(baseTile.element.style.top);
-
-                    group.forEach(t => {
-                        const idToRemove = t.id;
-                        t.element.remove();
-                        tiles = tiles.filter(item => item.id !== idToRemove);
-                    });
-
-                    for (let i = 0; i < wholesToMake; i++) {
-                        createTile(t0.type, t0.value, x + (i * 10), y + (i * 10), false, 1);
-                    }
-
-                    for (let i = 0; i < remainder; i++) {
-                        createTile(t0.type, t0.value, x + (wholesToMake * 10) + (i * 12), y + (i * 12), false, d);
-                    }
-                    
-                    anyRegrouped = true;
-                }
-            }
-
-            if (anyRegrouped) {
-                addLog("Regrouped fractional pieces into wholes.", "simplify");
-            }
-        }
-
-        function showMultiplyPrompt() { multiplyDialog.style.display = 'flex'; }
-        function closeMultiplyPrompt() { multiplyDialog.style.display = 'none'; }
-        function showDividePrompt() { divideDialog.style.display = 'flex'; }
-        function closeDividePrompt() { divideDialog.style.display = 'none'; }
-
-        function showCustomSplitPrompt() {
-            contextMenu.style.display = 'none';
-            inputDialog.style.display = 'flex';
-        }
-        function closeCustomPrompt() { inputDialog.style.display = 'none'; }
-        function applyCustomSplit() { splitTile(parseInt(customSplitInput.value)); closeCustomPrompt(); }
-
-        workspace.addEventListener('click', () => { contextMenu.style.display = 'none'; });
-
-        function startDrag(e) {
-            const client = e.type === 'touchstart' ? e.touches[0] : e;
-            const target = e.target.closest('.tile');
-            if (!target) return;
-            activeTile = tiles.find(t => t.id === target.id);
-            if (!activeTile || activeTile.isCanceling) return;
-            dragStarted = false;
-            isOffScreen = false;
-            const rect = activeTile.element.getBoundingClientRect();
-            offsetX = client.clientX - rect.left;
-            offsetY = client.clientY - rect.top;
-            window.addEventListener('mousemove', drag);
-            window.addEventListener('touchmove', drag, { passive: false });
-            window.addEventListener('mouseup', endDrag);
-            window.addEventListener('touchend', endDrag);
-        }
-
-        function drag(e) {
-            if (!activeTile) return;
-            dragStarted = true;
-            contextMenu.style.display = 'none';
-            const client = e.type === 'touchmove' ? e.touches[0] : e;
-            const wRect = workspace.getBoundingClientRect();
-            let nX = client.clientX - offsetX - wRect.left;
-            let nY = client.clientY - offsetY - wRect.top;
-            activeTile.element.style.left = nX + 'px';
-            activeTile.element.style.top = nY + 'px'; 
-            if (!modeToggle.checked) {
-                const tWidth = activeTile.element.offsetWidth;
-                const tHeight = activeTile.element.offsetHeight;
-                if (nX + tWidth < 0 || nX > wRect.width || nY + tHeight < 0 || nY > wRect.height) {
-                    isOffScreen = true;
-                    workspace.classList.add('dragging-off');
-                } else {
-                    isOffScreen = false;
-                    workspace.classList.remove('dragging-off');
-                }
-            }
-            checkCollisions(activeTile);
-        }
-
-        function checkCollisions(tile) {
-            const r1 = tile.element.getBoundingClientRect();
-            for (let other of tiles) {
-                if (other.id !== tile.id && other.type === tile.type && other.value !== tile.value && other.denom === tile.denom && !other.isCanceling) {
-                    const r2 = other.element.getBoundingClientRect();
-                    if (!(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom)) {
-                        cancelPair(tile, other);
-                        return;
-                    }
-                }
-            }
-        }
-
-        function cancelPair(t1, t2) {
-            t1.isCanceling = t2.isCanceling = true;
-            addLog(`Neutralized a zero pair.`, 'simplify');
-            t1.element.classList.add('canceling');
-            t2.element.classList.add('canceling');
-            tiles = tiles.filter(t => t.id !== t1.id && t.id !== t2.id);
-            if (activeTile && (activeTile.id === t1.id || activeTile.id === t2.id)) activeTile = null;
-            setTimeout(() => { t1.element.remove(); t2.element.remove(); updateUI(); }, 500);
-        }
-
-        function endDrag() {
-            if (activeTile && isOffScreen && !modeToggle.checked) {
-                const idToDelete = activeTile.id;
-                addLog(`Removed tile from workspace.`, 'info');
-                activeTile.element.remove();
-                tiles = tiles.filter(t => t.id !== idToDelete);
-            }
-            activeTile = null;
-            isOffScreen = false;
-            workspace.classList.remove('dragging-off');
-            window.removeEventListener('mousemove', drag);
-            window.removeEventListener('touchmove', drag);
-            updateUI();
-        }
-
-        function updateUI() {
-            const mid = window.innerWidth / 2;
-            let L = { x: { num: 0, den: 1 }, u: { num: 0, den: 1 } }, R = { x: { num: 0, den: 1 }, u: { num: 0, den: 1 } };
-            
-            tiles.forEach(t => {
-                const rect = t.element.getBoundingClientRect();
-                const side = (rect.left + rect.width/2) < mid ? L : R;
-                const target = t.type === 'x' ? side.x : side.u;
-                const newNum = target.num * t.denom + t.value * target.den;
-                const newDen = target.den * t.denom;
-                const common = Math.abs(gcd(newNum, newDen));
-                target.num = newNum / common;
-                target.den = newDen / common;
-            });
-
-            currentEquationStatus = { L, R };
-
-            const renderMath = (num, den, label, isFirst) => {
-                if (num === 0) return '';
-                const sign = num > 0 ? (isFirst ? '' : '+ ') : '- ';
-                const absNum = Math.abs(num);
-                let content = '';
-                if (den === 1) {
-                    content = `${absNum === 1 && label === 'x' ? '' : absNum}${label}`;
-                } else {
-                    content = `<div class="math-frac"><div class="math-num">${absNum === 1 && label === 'x' ? '' : absNum}${label}</div><div class="math-den">${den}</div></div>`;
-                }
-                return `<span>${sign}</span>${content}`;
+            const TILE_CONFIG = {
+                unit: { class: 'tile-unit', label: '1', posColor: 'var(--pos-unit)', negColor: 'var(--neg-unit)', width: 45, height: 45 },
+                x: { class: 'tile-x', label: 'x', posColor: 'var(--pos-x)', negColor: 'var(--neg-x)', width: 40, height: 100 }
             };
 
-            const formatSide = (s) => {
-                let parts = [];
-                const xHtml = renderMath(s.x.num, s.x.den, 'x', true);
-                if (xHtml) parts.push(xHtml);
-                const uHtml = renderMath(s.u.num, s.u.den, '', parts.length === 0);
-                if (uHtml) parts.push(uHtml);
-                return parts.length ? parts.join(' ') : '<span>0</span>';
+            function gcd(a, b) {
+                return b ? gcd(b, a % b) : a;
+            }
+
+            function simplifyFraction(num, den) {
+                if (den === 0) return { num, den }; 
+                const common = Math.abs(gcd(num, den));
+                let n = num / common;
+                let d = den / common;
+                if (d < 0) { n = -n; d = -d; }
+                return { num: n, den: d };
+            }
+
+            window.updateModeLabel = function() {
+                toggleLabel.innerText = modeToggle.checked ? "Solving Mode" : "Setup Mode";
+                if (!modeToggle.checked) {
+                    addLog("Switched to Setup Mode. Delete tiles by dragging off-screen.", "info");
+                } else {
+                    addLog("Switched to Solving Mode. Current setup saved as problem to solve.", "info");
+                    calculateTargetXFromLayout();
+                }
             };
 
-            const leftHtml = formatSide(L);
-            const rightHtml = formatSide(R);
-            equationText.innerHTML = `${leftHtml} <span class="px-2 text-slate-400">=</span> ${rightHtml}`;
-            totalLeftBadge.innerHTML = leftHtml;
-            totalRightBadge.innerHTML = rightHtml;
-        }
+            function calculateTargetXFromLayout() {
+                const state = currentEquationStatus;
+                if (!state.L || !state.R) return;
 
-        function clearCanvas() {
-            tiles.forEach(t => t.element.remove());
-            tiles = [];
-            targetX = null;
-            document.getElementById('log-target').innerText = "Manual Entry";
-            addLog("Workspace reset.", 'info');
-            updateUI();
-        }
+                const netXNum = state.L.x.num * state.R.x.den - state.R.x.num * state.L.x.den;
+                const netXDen = state.L.x.den * state.R.x.den;
+                
+                const netUNum = state.R.u.num * state.L.u.den - state.L.u.num * state.R.u.den;
+                const netUDen = state.R.u.den * state.L.u.den;
 
-        window.onload = () => {
-            updateModeLabel();
-            generateProblem(1);
-        };
-        window.addEventListener('resize', updateUI);
+                const resultNum = netUNum * netXDen;
+                const resultDen = netUDen * netXNum;
+
+                if (resultDen === 0) {
+                    targetX = null; 
+                } else {
+                    targetX = simplifyFraction(resultNum, resultDen);
+                }
+            }
+
+            function addLog(message, category = 'info') {
+                const entry = document.createElement('div');
+                entry.className = `history-entry ${category}`;
+                let icon = '📝';
+                if (category === 'balance' || category === 'purple' || category === 'simplify') icon = '⚖️';
+                if (category === 'success') icon = '🎉';
+                if (category === 'error') icon = '❌';
+                entry.innerHTML = `<span class="text-lg">${icon}</span> <span>${message}</span>`;
+                historyContent.appendChild(entry);
+                historyLog.scrollTop = historyLog.scrollHeight;
+            }
+
+            window.checkAnswer = function() {
+                const state = currentEquationStatus;
+                if (!state.L || !state.R) return;
+
+                const leftIsX = state.L.x.num === 1 && state.L.x.den === 1 && state.L.u.num === 0;
+                const rightIsX = state.R.x.num === 1 && state.R.x.den === 1 && state.R.u.num === 0;
+
+                let currentXVal = null;
+                if (leftIsX && state.R.x.num === 0) currentXVal = state.R.u;
+                else if (rightIsX && state.L.x.num === 0) currentXVal = state.L.u;
+
+                if (!currentXVal) {
+                    addLog("Keep going! Isolate a single <strong>+x</strong> on one side by itself.", "error");
+                    return;
+                }
+
+                if (targetX && currentXVal.num === targetX.num && currentXVal.den === targetX.den) {
+                    score++;
+                    pointsDisplay.innerText = score;
+                    addLog(`Correct! <strong>x = ${targetX.den === 1 ? targetX.num : targetX.num + '/' + targetX.den}</strong>. Point earned!`, "success");
+                    setTimeout(() => { generateProblem(Math.random() > 0.5 ? 2 : 1); }, 2000);
+                } else {
+                    addLog("Not quite the correct value for x. Check your zero pairs and balancing!", "error");
+                }
+            };
+
+            window.generateProblem = function(steps) {
+                clearCanvas();
+                const mid = window.innerWidth / 2;
+                const centerL = mid * 0.5;
+                const centerR = mid + (mid * 0.5);
+                const types = ['add', 'sub', 'mul', 'div'];
+                const chosenType = types[Math.floor(Math.random() * types.length)];
+                let problemStr = "";
+
+                if (steps === 1) {
+                    const val = Math.floor(Math.random() * 4) + 1;
+                    const result = Math.floor(Math.random() * 5) + 1;
+                    switch(chosenType) {
+                        case 'add':
+                            targetX = { num: result - val, den: 1 };
+                            problemStr = `x + ${val} = ${result}`;
+                            createTile('x', 1, centerL - 50, 100, false);
+                            for(let i=0; i<val; i++) createTile('unit', 1, centerL + (i%2)*55, 60 + Math.floor(i/2)*55, false);
+                            for(let i=0; i<result; i++) createTile('unit', 1, centerR - 50 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
+                            break;
+                        case 'sub':
+                            targetX = { num: result + val, den: 1 };
+                            problemStr = `x - ${val} = ${result}`;
+                            createTile('x', 1, centerL - 50, 100, false);
+                            for(let i=0; i<val; i++) createTile('unit', -1, centerL + (i%2)*55, 60 + Math.floor(i/2)*55, false);
+                            for(let i=0; i<result; i++) createTile('unit', 1, centerR - 50 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
+                            break;
+                        case 'mul':
+                            const coefMul = Math.floor(Math.random() * 2) + 2; 
+                            const xValMul = Math.floor(Math.random() * 3) + 1;
+                            targetX = { num: xValMul, den: 1 };
+                            problemStr = `${coefMul}x = ${coefMul * xValMul}`;
+                            for(let i=0; i<coefMul; i++) createTile('x', 1, centerL - 20, 40 + (i*110), false);
+                            for(let i=0; i<coefMul*xValMul; i++) createTile('unit', 1, centerR - 50 + (i%3)*55, 60 + Math.floor(i/3)*55, false);
+                            break;
+                        case 'div':
+                            const denomDiv = Math.floor(Math.random() * 3) + 2;
+                            const resUnitsDiv = Math.floor(Math.random() * 3) + 1;
+                            targetX = { num: resUnitsDiv * denomDiv, den: 1 };
+                            problemStr = `x/${denomDiv} = ${resUnitsDiv}`;
+                            createTile('x', 1, centerL - 20, 100, false, denomDiv);
+                            for(let i=0; i<resUnitsDiv; i++) createTile('unit', 1, centerR - 50 + (i*55), 100, false);
+                            break;
+                    }
+                } else {
+                    const coef = Math.floor(Math.random() * 2) + 2;
+                    const constant = Math.floor(Math.random() * 3) + 1;
+                    const xVal = Math.floor(Math.random() * 3) + 1;
+                    const result = coef * xVal + constant;
+                    targetX = { num: xVal, den: 1 };
+                    problemStr = `${coef}x + ${constant} = ${result}`;
+                    for(let i=0; i<coef; i++) createTile('x', 1, centerL - 60, 40 + (i*110), false);
+                    for(let i=0; i<constant; i++) createTile('unit', 1, centerL + 10 + (i%2)*55, 60 + Math.floor(i/2)*55, false);
+                    for(let i=0; i<result; i++) createTile('unit', 1, centerR - 60 + (i%3)*55, 60 + Math.floor(i/3)*55, false);
+                }
+                document.getElementById('log-target').innerText = problemStr;
+                addLog(`New problem: <strong>${problemStr}</strong>`, 'info');
+                updateUI();
+            };
+
+            window.handleAddTile = function(type, value) {
+                const mid = window.innerWidth / 2;
+                const isSolving = modeToggle.checked;
+                const sign = value > 0 ? '+' : '-';
+                
+                const scatterX = (Math.random() - 0.5) * 40;
+                const scatterY = (Math.random() - 0.5) * 40;
+
+                if (isSolving) {
+                    addLog(`Balanced side: Added <strong>${sign}${TILE_CONFIG[type].label}</strong> to <strong>both sides</strong>.`, 'balance');
+                    createTile(type, value, (mid * 0.25) + scatterX, 80 + scatterY, false);
+                    createTile(type, value, (mid + (mid * 0.25)) + scatterX, 80 + scatterY, false);
+                } else {
+                    addLog(`Setup: Added <strong>${sign}${TILE_CONFIG[type].label}</strong>.`, 'info');
+                    createTile(type, value, (mid - 100) + scatterX, 80 + scatterY, false);
+                }
+                updateUI();
+            };
+
+            function createTile(type, value, x, y, logIt = true, denom = 1) {
+                const config = TILE_CONFIG[type];
+                const id = `tile-${currentId++}`;
+                const div = document.createElement('div');
+                div.id = id;
+                div.className = `tile ${config.class} ${value > 0 ? 'pos' : 'neg'}`;
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                refreshTileVisuals(div, type, value, denom);
+                div.addEventListener('mousedown', startDrag);
+                div.addEventListener('touchstart', startDrag, { passive: false });
+                div.addEventListener('click', (e) => { if (!dragStarted) showContextMenu(e, id); });
+                workspace.appendChild(div);
+                tiles.push({ id, type, value, element: div, denom, isCanceling: false });
+                return tiles[tiles.length - 1];
+            }
+
+            function refreshTileVisuals(element, type, value, denom) {
+                const config = TILE_CONFIG[type];
+                const sign = value > 0 ? '+' : '-';
+                element.style.backgroundColor = value > 0 ? config.posColor : config.negColor;
+                element.className = `tile ${config.class} ${value > 0 ? 'pos' : 'neg'}`;
+                if (denom > 1) {
+                    element.innerHTML = `<span class='text-[10px]'>${sign}${config.label}</span><div class='split-line'></div><span class='text-[10px]'>${denom}</span>`;
+                } else {
+                    element.innerHTML = sign + config.label;
+                }
+            }
+
+            function showContextMenu(e, tileId) {
+                e.stopPropagation();
+                selectedTileForAction = tiles.find(t => t.id === tileId);
+                if (!selectedTileForAction || selectedTileForAction.isCanceling) return;
+                const rect = selectedTileForAction.element.getBoundingClientRect();
+                const wRect = workspace.getBoundingClientRect();
+                let posX = rect.left - wRect.left;
+                let posY = rect.bottom - wRect.top + 5;
+                contextMenu.style.left = Math.max(10, posX) + 'px';
+                contextMenu.style.top = Math.max(10, posY) + 'px';
+                contextMenu.style.display = 'flex';
+            }
+
+            window.splitTile = function(parts) {
+                if (!selectedTileForAction) return;
+                const t = selectedTileForAction;
+                const x = parseFloat(t.element.style.left), y = parseFloat(t.element.style.top);
+                addLog(`Split <strong>${t.type === 'x' ? 'x' : '1'}</strong> into <strong>${parts}</strong> pieces.`, 'info');
+                tiles = tiles.filter(item => item.id !== t.id);
+                t.element.remove();
+                for (let i = 0; i < parts; i++) createTile(t.type, t.value, x + (i * 12), y + (i * 12), false, t.denom * parts);
+                contextMenu.style.display = 'none';
+                selectedTileForAction = null;
+                updateUI();
+            };
+
+            window.applyMultiplyBothSides = function() {
+                const factor = parseInt(multiplyFactorInput.value);
+                if (isNaN(factor) || factor === 0) return;
+                addLog(`Multiplied <strong>both sides</strong> by <strong>${factor}</strong>.`, 'balance');
+                const absFactor = Math.abs(factor);
+                const oldTiles = [...tiles];
+                
+                oldTiles.forEach(tile => {
+                    const x = parseFloat(tile.element.style.left), y = parseFloat(tile.element.style.top);
+                    if (factor < 0) {
+                        tile.value *= -1;
+                        refreshTileVisuals(tile.element, tile.type, tile.value, tile.denom);
+                    }
+                    if (tile.denom > 1 && absFactor % tile.denom === 0) {
+                        const remaining = absFactor / tile.denom;
+                        tile.denom = 1;
+                        refreshTileVisuals(tile.element, tile.type, tile.value, 1);
+                        for (let i = 1; i < remaining; i++) createTile(tile.type, tile.value, x + (i * 15), y + (i * 15), false, 1);
+                    } else {
+                        for (let i = 1; i < absFactor; i++) createTile(tile.type, tile.value, x + (i * 15), y + (i * 15), false, tile.denom);
+                    }
+                });
+                closeMultiplyPrompt();
+                updateUI();
+            };
+
+            window.applyDivideBothSides = function() {
+                const factor = parseInt(divideFactorInput.value);
+                if (isNaN(factor) || factor === 0) return;
+                addLog(`Divided <strong>both sides</strong> by <strong>${factor}</strong>.`, 'simplify');
+                const absFactor = Math.abs(factor);
+                tiles.forEach(t => {
+                    if (factor < 0) t.value *= -1;
+                    t.denom *= absFactor;
+                    refreshTileVisuals(t.element, t.type, t.value, t.denom);
+                });
+                regroupFractionalTiles();
+                closeDividePrompt();
+                updateUI();
+            };
+
+            function regroupFractionalTiles() {
+                const mid = window.innerWidth / 2;
+                const groupings = {};
+                tiles.forEach(t => {
+                    const side = (parseFloat(t.element.style.left) + 20) < mid ? 'L' : 'R';
+                    const key = `${side}_${t.type}_${t.value}_${t.denom}`;
+                    if (!groupings[key]) groupings[key] = [];
+                    groupings[key].push(t);
+                });
+                let anyReg = false;
+                for (const key in groupings) {
+                    const group = groupings[key];
+                    if (group.length === 0) continue;
+                    const d = group[0].denom;
+                    if (d > 1 && group.length >= d) {
+                        const wholes = Math.floor(group.length / d);
+                        const rem = group.length % d;
+                        const x = parseFloat(group[0].element.style.left), y = parseFloat(group[0].element.style.top);
+                        group.forEach(t => { t.element.remove(); tiles = tiles.filter(item => item.id !== t.id); });
+                        for (let i = 0; i < wholes; i++) createTile(group[0].type, group[0].value, x + (i * 10), y + (i * 10), false, 1);
+                        for (let i = 0; i < rem; i++) createTile(group[0].type, group[0].value, x + (wholes * 10) + (i * 12), y + (i * 12), false, d);
+                        anyReg = true;
+                    }
+                }
+                if (anyReg) addLog("Regrouped fractional pieces into wholes.", "simplify");
+            }
+
+            window.showMultiplyPrompt = function() { multiplyDialog.style.display = 'flex'; };
+            window.closeMultiplyPrompt = function() { multiplyDialog.style.display = 'none'; };
+            window.showDividePrompt = function() { divideDialog.style.display = 'flex'; };
+            window.closeDividePrompt = function() { divideDialog.style.display = 'none'; };
+            window.showCustomSplitPrompt = function() { contextMenu.style.display = 'none'; inputDialog.style.display = 'flex'; };
+            window.closeCustomPrompt = function() { inputDialog.style.display = 'none'; };
+            window.applyCustomSplit = function() { splitTile(parseInt(customSplitInput.value)); closeCustomPrompt(); };
+
+            workspace.addEventListener('click', () => { contextMenu.style.display = 'none'; });
+
+            function startDrag(e) {
+                const client = e.type === 'touchstart' ? e.touches[0] : e;
+                const target = e.target.closest('.tile');
+                if (!target) return;
+                activeTile = tiles.find(t => t.id === target.id);
+                if (!activeTile || activeTile.isCanceling) return;
+                dragStarted = false;
+                isOffScreen = false;
+                const rect = activeTile.element.getBoundingClientRect();
+                offsetX = client.clientX - rect.left;
+                offsetY = client.clientY - rect.top;
+                window.addEventListener('mousemove', drag);
+                window.addEventListener('touchmove', drag, { passive: false });
+                window.addEventListener('mouseup', endDrag);
+                window.addEventListener('touchend', endDrag);
+            }
+
+            function drag(e) {
+                if (!activeTile) return;
+                dragStarted = true;
+                contextMenu.style.display = 'none';
+                const client = e.type === 'touchmove' ? e.touches[0] : e;
+                const wRect = workspace.getBoundingClientRect();
+                let nX = client.clientX - offsetX - wRect.left;
+                let nY = client.clientY - offsetY - wRect.top;
+                activeTile.element.style.left = nX + 'px';
+                activeTile.element.style.top = nY + 'px'; 
+                if (!modeToggle.checked) {
+                    if (nX + 40 < 0 || nX > wRect.width || nY + 40 < 0 || nY > wRect.height) {
+                        isOffScreen = true;
+                        workspace.classList.add('dragging-off');
+                    } else {
+                        isOffScreen = false;
+                        workspace.classList.remove('dragging-off');
+                    }
+                }
+                checkCollisions(activeTile);
+            }
+
+            function checkCollisions(tile) {
+                const r1 = tile.element.getBoundingClientRect();
+                for (let other of tiles) {
+                    if (other.id !== tile.id && other.type === tile.type && other.value !== tile.value && other.denom === tile.denom && !other.isCanceling) {
+                        const r2 = other.element.getBoundingClientRect();
+                        if (!(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom)) {
+                            cancelPair(tile, other);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            function cancelPair(t1, t2) {
+                t1.isCanceling = t2.isCanceling = true;
+                addLog(`Neutralized zero pair.`, 'simplify');
+                t1.element.classList.add('canceling');
+                t2.element.classList.add('canceling');
+                tiles = tiles.filter(t => t.id !== t1.id && t.id !== t2.id);
+                if (activeTile && (activeTile.id === t1.id || activeTile.id === t2.id)) activeTile = null;
+                setTimeout(() => { t1.element.remove(); t2.element.remove(); updateUI(); }, 500);
+            }
+
+            function endDrag() {
+                if (activeTile && isOffScreen && !modeToggle.checked) {
+                    activeTile.element.remove();
+                    tiles = tiles.filter(t => t.id !== activeTile.id);
+                    addLog(`Removed tile.`, 'info');
+                }
+                activeTile = null;
+                isOffScreen = false;
+                workspace.classList.remove('dragging-off');
+                window.removeEventListener('mousemove', drag);
+                window.removeEventListener('touchmove', drag);
+                updateUI();
+            }
+
+            function updateUI() {
+                const mid = window.innerWidth / 2;
+                let L = { x: { num: 0, den: 1 }, u: { num: 0, den: 1 } }, R = { x: { num: 0, den: 1 }, u: { num: 0, den: 1 } };
+                tiles.forEach(t => {
+                    const rect = t.element.getBoundingClientRect();
+                    const side = (rect.left + rect.width/2) < mid ? L : R;
+                    const target = t.type === 'x' ? side.x : side.u;
+                    const newNum = target.num * t.denom + t.value * target.den;
+                    const newDen = target.den * t.denom;
+                    const common = Math.abs(gcd(newNum, newDen));
+                    target.num = newNum / common;
+                    target.den = newDen / common;
+                });
+                currentEquationStatus = { L, R };
+                const renderMath = (num, den, label, isFirst) => {
+                    if (num === 0) return '';
+                    const sign = num > 0 ? (isFirst ? '' : '+ ') : '- ';
+                    const absNum = Math.abs(num);
+                    let content = den === 1 ? `${absNum === 1 && label === 'x' ? '' : absNum}${label}` : `<div class="math-frac"><div class="math-num">${absNum === 1 && label === 'x' ? '' : absNum}${label}</div><div class="math-den">${den}</div></div>`;
+                    return `<span>${sign}</span>${content}`;
+                };
+                const formatSide = (s) => {
+                    let parts = [];
+                    const xHtml = renderMath(s.x.num, s.x.den, 'x', true);
+                    if (xHtml) parts.push(xHtml);
+                    const uHtml = renderMath(s.u.num, s.u.den, '', parts.length === 0);
+                    if (uHtml) parts.push(uHtml);
+                    return parts.length ? parts.join(' ') : '<span>0</span>';
+                };
+                equationText.innerHTML = `${formatSide(L)} <span class="px-2 text-slate-400">=</span> ${formatSide(R)}`;
+                totalLeftBadge.innerHTML = formatSide(L);
+                totalRightBadge.innerHTML = formatSide(R);
+            }
+
+            window.clearCanvas = function() {
+                tiles.forEach(t => t.element.remove());
+                tiles = [];
+                targetX = null;
+                document.getElementById('log-target').innerText = "Manual Entry";
+                addLog("Workspace reset.", 'info');
+                updateUI();
+            };
+
+            window.onload = () => { updateModeLabel(); generateProblem(1); };
+            window.addEventListener('resize', updateUI);
+        })();
     </script>
 </body>
 </html>
