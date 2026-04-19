@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Binary Vault: Advanced Decryption</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #020617;
+            color: #f8fafc;
+            font-family: 'JetBrains Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            /* Prevent pull-to-refresh and system gestures interfering with game */
+            touch-action: none; 
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .vault-container { perspective: 1200px; }
+        
+        /* Hallway Animation */
+        .hallway-scene {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, #020617, #0f172a, #020617);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            z-index: 5;
+            transition: opacity 0.5s;
+        }
+        
+        .hallway-lines {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background-image: 
+                linear-gradient(90deg, rgba(14, 165, 233, 0.1) 1px, transparent 1px),
+                linear-gradient(rgba(14, 165, 233, 0.1) 1px, transparent 1px);
+            background-size: 100px 100px;
+            transform: rotateX(60deg) translateY(0);
+        }
+
+        .walking .hallway-lines {
+            animation: moveHallway 1s linear infinite;
+        }
+
+        @keyframes moveHallway {
+            from { transform: rotateX(60deg) translateY(0); }
+            to { transform: rotateX(60deg) translateY(100px); }
+        }
+
+        /* Door Animation */
+        .door-panel {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background: #1e293b;
+            border: 4px solid #334155;
+            z-index: 10;
+            transition: transform 0.8s cubic-bezier(0.7, 0, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .door-left { left: 0; border-right: 2px solid #0ea5e9; }
+        .door-right { right: 0; border-left: 2px solid #0ea5e9; }
+        
+        .doors-open .door-left { transform: translateX(-100%); }
+        .doors-open .door-right { transform: translateX(100%); }
+
+        .sticky-note {
+            background: #fef08a;
+            color: #854d0e;
+            transform: rotate(-2deg);
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            border-bottom-right-radius: 20px 5px;
+            white-space: nowrap;
+        }
+        .cheat-sheet {
+            background: #e2e8f0;
+            color: #1e293b;
+            transform: rotate(1deg);
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+            font-size: 0.65rem;
+            line-height: 1.1;
+        }
+        .digital-display {
+            font-family: 'Orbitron', sans-serif;
+            background: #000;
+            box-shadow: inset 0 0 10px #0ea5e9;
+        }
+        .toggle-switch {
+            width: 45px; /* Increased size for iPad touch targets */
+            height: 80px;
+            background: #1e293b;
+            border: 2px solid #334155;
+            cursor: pointer;
+            position: relative;
+            touch-action: manipulation;
+        }
+        .toggle-switch.active { background: #0ea5e9; box-shadow: 0 0 15px #0ea5e9; }
+        .toggle-knob {
+            width: 100%; height: 50%;
+            background: #475569;
+            position: absolute; top: 50%;
+            transition: top 0.1s;
+            pointer-events: none;
+        }
+        .toggle-switch.active .toggle-knob { top: 0; background: #f8fafc; }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .error-shake { animation: shake 0.2s ease-in-out 0s 2; }
+        .success-flash { animation: flashGreen 0.5s ease-out; }
+        @keyframes flashGreen {
+            0% { box-shadow: inset 0 0 0px #22c55e; }
+            50% { box-shadow: inset 0 0 50px #22c55e; }
+            100% { box-shadow: inset 0 0 0px #22c55e; }
+        }
+        
+        .time-penalty { color: #ef4444; animation: floatDown 1s ease-out forwards; }
+        @keyframes floatDown {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(20px); opacity: 0; }
+        }
+
+        /* Input Styling for touch devices */
+        input {
+            -webkit-appearance: none;
+            border-radius: 0;
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* Visual accessibility for iPad landscape/portrait */
+        @media (max-height: 600px) {
+            #vault-wrapper { min-height: 400px; }
+            .sticky-note { top: 2px; font-size: 10px; padding: 4px; }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center overflow-hidden">
+
+    <div id="game-container" class="w-full max-w-4xl p-2 md:p-4">
+        <!-- HUD -->
+        <div class="mb-4 md:mb-6 flex justify-between items-center px-4">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold text-sky-500 tracking-tighter">THE BINARY VAULT</h1>
+                <p id="system-msg" class="text-[9px] md:text-[10px] text-sky-700 font-bold uppercase tracking-widest">Logic Encrypted</p>
+            </div>
+            <div class="flex gap-4 md:gap-8 items-center">
+                <button id="abort-btn" onclick="abortMission()" class="hidden bg-red-900/20 text-red-500 border border-red-900 px-2 md:px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest active:bg-red-900/60 transition-colors">
+                    Abort
+                </button>
+                <div class="text-right">
+                    <div class="text-[9px] text-slate-500 uppercase">Score</div>
+                    <div id="score-display" class="text-lg md:text-2xl font-bold text-yellow-500">5000</div>
+                </div>
+                <div class="text-right relative">
+                    <div class="text-[9px] text-slate-500 uppercase">Time</div>
+                    <div id="timer-display" class="text-lg md:text-2xl font-bold font-mono text-sky-400">00:00</div>
+                    <div id="time-penalty-pop" class="absolute right-0 bottom-[-20px] hidden font-bold text-red-500 whitespace-nowrap">+10s Penalty</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="vault-wrapper" class="vault-container relative bg-slate-950 border-2 md:border-4 border-slate-900 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl min-h-[500px] flex items-center justify-center touch-none">
+            
+            <!-- Hallway Transition Layer -->
+            <div id="hallway" class="hallway-scene hidden opacity-0">
+                <div class="hallway-lines"></div>
+                <div class="door-panel door-left">
+                    <div class="w-6 md:w-8 h-32 bg-slate-800 rounded border border-slate-700"></div>
+                </div>
+                <div class="door-panel door-right">
+                    <div class="w-6 md:w-8 h-32 bg-slate-800 rounded border border-slate-700"></div>
+                </div>
+            </div>
+
+            <!-- Dynamic Lock Screen -->
+            <div id="lock-screen" class="w-full flex flex-col items-center p-4 md:p-8">
+                <div id="hint-note" class="sticky-note absolute top-2 md:top-4 right-2 md:right-4 p-3 md:p-4 w-auto min-w-[10rem] text-xs md:text-sm z-20">Initializing...</div>
+                
+                <!-- Cheat Sheets -->
+                <div id="cheat-sheet-ascii" class="cheat-sheet absolute top-2 md:top-4 left-2 md:left-4 p-3 w-32 md:w-40 rounded border border-slate-400 z-20 hidden">
+                    <div class="font-bold border-b border-slate-400 mb-1 text-[8px]">ASCII REFERENCE</div>
+                    <div class="grid grid-cols-2 gap-x-1 text-[8px] md:text-[9px]">
+                        <span>A:65 B:66</span><span>C:67 D:68</span>
+                        <span>E:69 F:70</span><span>G:71 H:72</span>
+                        <span>I:73 J:74</span><span>K:75 L:76</span>
+                        <span>M:77 N:78</span><span>O:79 P:80</span>
+                        <span>Q:81 R:82</span><span>S:83 T:84</span>
+                        <span>U:85 V:86</span><span>W:87 X:88</span>
+                        <span>Y:89 Z:90</span>
+                    </div>
+                </div>
+
+                <div id="lock-interface" class="w-full flex flex-col items-center mt-8 md:mt-0"></div>
+            </div>
+
+            <!-- Start/Mode Selection Screen -->
+            <div id="start-screen" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-center p-4 md:p-8 z-50">
+                <div id="main-menu" class="w-full">
+                    <h2 class="text-3xl md:text-4xl font-black text-white mb-2 italic">SELECT PROTOCOL</h2>
+                    <p class="text-slate-500 mb-6 md:mb-8 text-xs md:text-sm">Welcome, Agent. Decryption required for entry.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-2xl mx-auto">
+                        <button onclick="setMode('mission')" class="group bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl active:border-sky-500 md:hover:border-sky-500 transition-all text-left">
+                            <div class="text-sky-500 text-[10px] font-bold mb-1 uppercase">Protocol A</div>
+                            <div class="text-white font-bold text-base md:text-lg mb-1 group-active:text-sky-400">Mission</div>
+                            <p class="text-slate-500 text-[9px] md:text-[10px]">Complete 5 layers to unlock the central vault.</p>
+                        </button>
+                        <button onclick="setMode('endless')" class="group bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl active:border-yellow-500 md:hover:border-yellow-500 transition-all text-left">
+                            <div class="text-yellow-500 text-[10px] font-bold mb-1 uppercase">Protocol B</div>
+                            <div class="text-white font-bold text-base md:text-lg mb-1 group-active:text-yellow-400">Endless</div>
+                            <p class="text-slate-500 text-[9px] md:text-[10px]">Infinite security layers. Go as long as you can.</p>
+                        </button>
+                        <button onclick="showTestOptions()" class="group bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl active:border-green-500 md:hover:border-green-500 transition-all text-left">
+                            <div class="text-green-500 text-[10px] font-bold mb-1 uppercase">Protocol C</div>
+                            <div class="text-white font-bold text-base md:text-lg mb-1 group-active:text-green-400">Test Lab</div>
+                            <p class="text-slate-500 text-[9px] md:text-[10px]">Pick a specific puzzle type to master.</p>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="test-options" class="hidden bg-slate-900 p-6 md:p-8 rounded-2xl md:rounded-3xl border border-green-900/50 w-full max-w-2xl shadow-2xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="text-green-500 text-[10px] font-bold uppercase tracking-widest">Protocol C: Configuration</div>
+                        <button onclick="hideTestOptions()" class="text-slate-500 active:text-white text-[10px] font-bold flex items-center gap-1">
+                            <span>←</span> BACK
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2 md:gap-3 mb-4">
+                        <button onclick="setMode('test', 'keypad')" class="bg-slate-800 active:bg-green-700 py-4 md:py-6 rounded-xl text-xs md:text-sm font-bold transition-colors">EXPONENTS (KEYPAD)</button>
+                        <button onclick="setMode('test', 'toggle')" class="bg-slate-800 active:bg-green-700 py-4 md:py-6 rounded-xl text-xs md:text-sm font-bold transition-colors">BINARY TOGGLE</button>
+                        <button onclick="setMode('test', 'input')" class="bg-slate-800 active:bg-green-700 py-4 md:py-6 rounded-xl text-xs md:text-sm font-bold transition-colors">EXPO (INPUT)</button>
+                        <button onclick="setMode('test', 'terminal')" class="bg-slate-800 active:bg-green-700 py-4 md:py-6 rounded-xl text-xs md:text-sm font-bold transition-colors">ASCII DECODE</button>
+                    </div>
+                    <p class="text-[9px] text-slate-500 text-center italic">Tests consist of 100 consecutive puzzles.</p>
+                </div>
+            </div>
+
+            <!-- Success Screen -->
+            <div id="end-screen" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-center p-4 md:p-8 z-50">
+                <div class="text-5xl md:text-6xl mb-4 text-green-500">🏆</div>
+                <h2 class="text-3xl md:text-5xl font-black mb-2 text-white">MISSION LOGGED</h2>
+                <p id="end-body" class="text-slate-400 mb-6 text-sm"></p>
+                <div class="bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-800 mb-8">
+                    <div class="text-[10px] text-slate-500 uppercase">Final Security Rating</div>
+                    <div id="final-score" class="text-3xl md:text-4xl font-bold text-yellow-500">0</div>
+                </div>
+                <button onclick="location.reload()" class="text-sky-500 active:underline font-bold uppercase tracking-widest text-xs md:text-sm">Return to Command</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let gameActive = false;
+        let gameMode = 'mission'; 
+        let testType = '';
+        let baseScore = 5000;
+        let timeElapsed = 0;
+        let currentLevel = 0;
+        let challenges = [];
+        let timerInterval;
+        let activeInput = "";
+        let toggleBits = [0,0,0,0,0,0,0,0];
+
+        const WORDS = ["BITS", "DATA", "CODE", "LOCK", "GATE", "NODE", "CORE", "BASE", "CHIP", "SYNC", "BYTE", "VOID", "USER", "FILE", "DISK", "LINK", "HOST", "PORT", "WEB", "NULL"];
+        const SUPERSCRIPTS = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+
+        // Helper to get superscript text
+        function toSuperscript(num) {
+            return num.toString().split('').map(digit => SUPERSCRIPTS[digit] || digit).join('');
+        }
+
+        function showTestOptions() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('test-options').classList.remove('hidden');
+        }
+
+        function hideTestOptions() {
+            document.getElementById('main-menu').classList.remove('hidden');
+            document.getElementById('test-options').classList.add('hidden');
+        }
+
+        function setMode(mode, type = '') {
+            gameMode = mode;
+            testType = type;
+            startGame();
+        }
+
+        function abortMission() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            document.getElementById('abort-btn').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            document.getElementById('test-options').classList.add('hidden');
+            updateStatus("Mission Aborted");
+        }
+
+        function generateExponentsProblem() {
+            const basePool = [2, 2, 2, 3, 3, 4, 5, 6, 7];
+            const base = basePool[Math.floor(Math.random() * basePool.length)];
+            const logicType = Math.floor(Math.random() * 4);
+            let val = 1001; 
+            let hint = "";
+
+            while (val > 1000) {
+                switch(logicType) {
+                    case 0: // Addition
+                        const e1 = Math.floor(Math.log(500) / Math.log(base));
+                        const e2 = Math.floor(Math.log(500) / Math.log(base));
+                        const p1 = Math.floor(Math.random() * e1) + 1;
+                        const p2 = Math.floor(Math.random() * e2) + 1;
+                        hint = `Solve: ${base}${toSuperscript(p1)} + ${base}${toSuperscript(p2)}`;
+                        val = Math.pow(base, p1) + Math.pow(base, p2);
+                        break;
+                    case 1: // Subtraction
+                        const maxE = Math.floor(Math.log(999) / Math.log(base));
+                        const high = Math.floor(Math.random() * (maxE - 1)) + 2;
+                        const low = Math.floor(Math.random() * high);
+                        hint = `Solve: ${base}${toSuperscript(high)} - ${base}${toSuperscript(low)}`;
+                        val = Math.pow(base, high) - Math.pow(base, low);
+                        break;
+                    case 2: // Multiplication
+                        const maxMultE = Math.floor(Math.log(999) / Math.log(base));
+                        const m1 = Math.floor(Math.random() * (maxMultE));
+                        const m2 = Math.floor(Math.random() * (maxMultE - m1));
+                        hint = `Solve: ${base}${toSuperscript(m1)} * ${base}${toSuperscript(m2)}`;
+                        val = Math.pow(base, m1 + m2);
+                        break;
+                    case 3: // Power of Power
+                        const maxPE = Math.floor(Math.log(999) / Math.log(base));
+                        const outer = Math.floor(Math.random() * 3) + 2; 
+                        const inner = Math.floor(maxPE / outer);
+                        if (inner < 1) { val = 1001; break; }
+                        hint = `Solve: (${base}${toSuperscript(inner)})${toSuperscript(outer)}`;
+                        val = Math.pow(Math.pow(base, inner), outer);
+                        break;
+                }
+            }
+            return { hint, val };
+        }
+
+        function generateChallenge(forceType = null) {
+            const types = ["keypad", "toggle", "input", "terminal"];
+            const type = forceType || types[Math.floor(Math.random() * types.length)];
+            let challenge = { type: type };
+            
+            if(type === "keypad" || type === "input") {
+                const prob = generateExponentsProblem();
+                challenge.hint = prob.hint;
+                challenge.code = prob.val.toString();
+            } 
+            else if(type === "toggle") {
+                const val = Math.floor(Math.random() * 254) + 1;
+                challenge.hint = `Binary: ${val}`;
+                challenge.code = val.toString();
+            }
+            else if(type === "terminal") {
+                const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+                const binaryArr = word.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0'));
+                challenge.hint = `Decode: ${binaryArr.join(' ')}`;
+                challenge.code = word;
+            }
+            return challenge;
+        }
+
+        function startGame() {
+            currentLevel = 0;
+            timeElapsed = 0;
+            
+            if(gameMode === 'test') {
+                challenges = Array(100).fill(null).map(() => generateChallenge(testType));
+            } else if (gameMode === 'mission') {
+                challenges = Array(5).fill(null).map(() => generateChallenge());
+            } else {
+                challenges = Array(1000).fill(null).map(() => generateChallenge());
+            }
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('abort-btn').classList.remove('hidden');
+            gameActive = true;
+            startTimer();
+            loadLevel();
+        }
+
+        function startTimer() {
+            if(timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (!gameActive) return;
+                timeElapsed++;
+                updateTimerDisplay();
+                updateScore();
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timeElapsed / 60);
+            const secs = timeElapsed % 60;
+            document.getElementById('timer-display').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        async function triggerTransition() {
+            gameActive = false;
+            const hallway = document.getElementById('hallway');
+            const wrapper = document.getElementById('vault-wrapper');
+            
+            wrapper.classList.add('success-flash');
+            updateStatus("ENCRYPTION BYPASSED");
+            
+            await new Promise(r => setTimeout(r, 600));
+            wrapper.classList.remove('success-flash');
+
+            hallway.classList.remove('hidden');
+            hallway.style.opacity = '1';
+            hallway.classList.add('doors-open');
+            
+            await new Promise(r => setTimeout(r, 800));
+            hallway.classList.add('walking');
+            updateStatus(gameMode === 'endless' ? `STATION ${currentLevel} SECURED` : "PROCEEDING...");
+            
+            await new Promise(r => setTimeout(r, 1500));
+            
+            hallway.classList.remove('doors-open');
+            await new Promise(r => setTimeout(r, 600));
+            
+            hallway.classList.add('hidden');
+            hallway.classList.remove('walking');
+            hallway.style.opacity = '0';
+            
+            gameActive = true;
+            loadLevel();
+        }
+
+        function loadLevel() {
+            if(gameMode === 'mission' && currentLevel >= 5) {
+                endGame();
+                return;
+            }
+            const challenge = challenges[currentLevel];
+            document.getElementById('hint-note').innerText = challenge.hint;
+            
+            document.getElementById('cheat-sheet-ascii').classList.add('hidden');
+            if(challenge.type === 'terminal') {
+                document.getElementById('cheat-sheet-ascii').classList.remove('hidden');
+            }
+
+            renderInterface(challenge);
+            updateStatus(`${gameMode.toUpperCase()} STATION ${currentLevel + 1}`);
+        }
+
+        function renderInterface(challenge) {
+            const container = document.getElementById('lock-interface');
+            container.innerHTML = "";
+            activeInput = "";
+
+            if(challenge.type === "keypad") {
+                container.innerHTML = `
+                    <div class="bg-slate-900 p-4 md:p-6 rounded-xl border-2 border-slate-800 shadow-inner w-full max-w-xs">
+                        <div id="key-display" class="digital-display h-12 w-full mb-4 rounded flex items-center justify-center text-2xl text-sky-400">----</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            ${[1,2,3,4,5,6,7,8,9].map(n => `<button ontouchstart="pressKey('${n}')" onclick="pressKey('${n}')" class="bg-slate-800 p-4 md:p-5 rounded active:bg-sky-900/40 active:scale-95 transition-all text-xl font-bold">${n}</button>`).join('')}
+                            <button ontouchstart="activeInput=''; document.getElementById('key-display').innerText='----'" onclick="activeInput=''; document.getElementById('key-display').innerText='----'" class="bg-red-900/20 text-red-500 p-4 md:p-5 rounded font-bold">C</button>
+                            <button ontouchstart="pressKey('0')" onclick="pressKey('0')" class="bg-slate-800 p-4 md:p-5 rounded text-xl font-bold">0</button>
+                            <button ontouchstart="checkKeypad()" onclick="checkKeypad()" class="bg-green-900/20 text-green-500 p-4 md:p-5 rounded font-bold">ENT</button>
+                        </div>
+                    </div>
+                `;
+            } else if(challenge.type === "toggle") {
+                toggleBits = [0,0,0,0,0,0,0,0];
+                container.innerHTML = `
+                    <div class="flex flex-col items-center bg-slate-900 p-4 md:p-8 rounded-2xl border-2 border-slate-800 w-full overflow-x-auto">
+                        <div class="flex gap-2 mb-8 p-4 bg-black rounded-lg shadow-inner min-w-max">
+                            ${[7,6,5,4,3,2,1,0].map(i => `
+                                <div class="flex flex-col items-center gap-1">
+                                    <div id="bit-${i}" ontouchstart="toggleBit(${i})" onclick="toggleBit(${i})" class="toggle-switch"><div class="toggle-knob"></div></div>
+                                    <span class="text-[9px] text-slate-500 font-bold">${Math.pow(2, i)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button onclick="checkToggles()" ontouchstart="checkToggles()" class="bg-sky-600 px-8 md:px-12 py-3 md:py-4 rounded-full font-bold active:bg-sky-500 active:scale-95 transition-all text-sm uppercase tracking-widest">VERIFY BINARY</button>
+                    </div>
+                `;
+            } else if(challenge.type === "input") {
+                container.innerHTML = `
+                    <div class="w-full max-w-sm bg-slate-900 p-8 md:p-10 rounded-2xl border-2 border-slate-800 flex flex-col items-center">
+                        <label class="text-[9px] text-slate-500 uppercase mb-4 tracking-widest">Entry Protocol</label>
+                        <input type="number" id="num-in" inputmode="numeric" class="bg-black text-sky-400 text-4xl md:text-5xl font-black w-full text-center p-4 rounded-xl border-2 border-slate-800 outline-none focus:border-sky-500 transition-colors mb-6 shadow-inner" onkeyup="if(event.key==='Enter') checkManualInput()" placeholder="0">
+                        <button onclick="checkManualInput()" class="w-full bg-sky-600 py-4 rounded-xl font-bold active:bg-sky-500 active:scale-95 transition-all uppercase tracking-widest text-xs md:text-sm">VALIDATE CORE</button>
+                    </div>
+                `;
+            } else if(challenge.type === "terminal") {
+                container.innerHTML = `
+                    <div class="w-full max-w-sm bg-black p-4 md:p-6 rounded-xl border-2 border-green-900/50 font-mono shadow-lg">
+                        <div class="text-green-500 text-[9px] mb-4 opacity-70 tracking-tighter">> AUTHENTICATION_REQUIRED: ENTER WORD</div>
+                        <input type="text" id="term" class="bg-transparent text-green-400 text-2xl md:text-3xl w-full border-b border-green-900 outline-none uppercase tracking-[0.3em] pb-2 text-center rounded-none" onkeyup="if(event.key==='Enter') checkTerminal()" placeholder="____">
+                        <button onclick="checkTerminal()" class="mt-8 w-full border border-green-900 py-3 text-green-700 text-[10px] active:bg-green-900/40 active:text-green-400 transition-colors uppercase tracking-widest">[ EXECUTE PROTOCOL ]</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Modified pressKey for both click and touch
+        function pressKey(n) { 
+            event.preventDefault(); // Prevent double trigger on some devices
+            if(activeInput.length < 4) activeInput += n; 
+            document.getElementById('key-display').innerText = activeInput;
+        }
+
+        function checkKeypad() { 
+            event.preventDefault();
+            validate(activeInput === challenges[currentLevel].code); 
+        }
+
+        function toggleBit(i) {
+            event.preventDefault();
+            toggleBits[i] = toggleBits[i] ? 0 : 1;
+            document.getElementById(`bit-${i}`).classList.toggle('active');
+        }
+
+        function checkToggles() {
+            event.preventDefault();
+            const dec = toggleBits.reduce((a, b, i) => a + (b * Math.pow(2, i)), 0);
+            validate(dec.toString() === challenges[currentLevel].code);
+        }
+
+        function checkManualInput() { 
+            const val = document.getElementById('num-in').value;
+            validate(val === challenges[currentLevel].code); 
+        }
+
+        function checkTerminal() { 
+            const val = document.getElementById('term').value.toUpperCase();
+            validate(val === challenges[currentLevel].code); 
+        }
+
+        function validate(isCorrect) {
+            if(isCorrect) {
+                currentLevel++;
+                triggerTransition();
+            } else {
+                timeElapsed += 10; 
+                showTimePenalty();
+                updateTimerDisplay();
+                updateScore();
+                const box = document.getElementById('lock-interface');
+                box.classList.add('error-shake');
+                setTimeout(() => box.classList.remove('error-shake'), 300);
+            }
+        }
+
+        function showTimePenalty() {
+            const pop = document.getElementById('time-penalty-pop');
+            pop.classList.remove('hidden');
+            pop.classList.add('time-penalty');
+            setTimeout(() => {
+                pop.classList.add('hidden');
+                pop.classList.remove('time-penalty');
+            }, 1000);
+        }
+
+        function updateScore() {
+            let s = 0;
+            if(gameMode === 'endless') {
+                s = (currentLevel * 1000) - (timeElapsed * 5);
+            } else {
+                s = baseScore - (timeElapsed * 10);
+            }
+            document.getElementById('score-display').innerText = Math.max(0, s).toString().padStart(4, '0');
+        }
+
+        function updateStatus(m) {
+            document.getElementById('system-msg').innerText = m;
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            document.getElementById('abort-btn').classList.add('hidden');
+            const scoreText = document.getElementById('score-display').innerText;
+            const screen = document.getElementById('end-screen');
+            screen.classList.remove('hidden');
+            document.getElementById('end-body').innerText = `Mission successful. All security nodes cleared in ${Math.floor(timeElapsed/60)}m ${timeElapsed%60}s.`;
+            document.getElementById('final-score').innerText = scoreText;
+            updateStatus("MISSION SUCCESS");
+        }
+
+        // Prevent unwanted system scrolling on iOS
+        document.addEventListener('touchmove', function(e) {
+            if (gameActive) e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
